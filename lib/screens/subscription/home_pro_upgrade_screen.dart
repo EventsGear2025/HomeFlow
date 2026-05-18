@@ -30,6 +30,7 @@ class _HomeProUpgradeScreenState extends State<HomeProUpgradeScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final household = auth.household;
+    final householdName = household?.householdName;
     final isOwner = auth.isOwner;
     final source = widget.source;
     final sourceLabel = source == null || source.trim().isEmpty
@@ -88,8 +89,8 @@ class _HomeProUpgradeScreenState extends State<HomeProUpgradeScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  household?.householdName?.isNotEmpty == true
-                      ? '${household!.householdName} is on ${auth.householdPlanLabel}. Home Pro adds premium analytics, advanced household coordination, and fewer limits.'
+                  householdName != null && householdName.isNotEmpty
+                      ? '$householdName is on ${auth.householdPlanLabel}. Home Pro adds premium analytics, advanced household coordination, and fewer limits.'
                       : 'Your current plan is ${auth.householdPlanLabel}. Home Pro adds premium analytics, advanced household coordination, and fewer limits.',
                   style: const TextStyle(
                     color: Colors.white70,

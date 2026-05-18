@@ -73,6 +73,62 @@ class ChildModel {
       );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ChildSchoolNeed — "kid needs X for school on [date]"
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ChildSchoolNeed {
+  final String id;
+  final String childId;
+  final String householdId;
+  final String itemName;
+  /// The school date on which this item is needed (usually tomorrow).
+  final DateTime neededForDate;
+  bool isResolved;
+  final DateTime createdAt;
+
+  ChildSchoolNeed({
+    required this.id,
+    required this.childId,
+    required this.householdId,
+    required this.itemName,
+    required this.neededForDate,
+    this.isResolved = false,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'childId': childId,
+        'householdId': householdId,
+        'itemName': itemName,
+        'neededForDate': neededForDate.toIso8601String(),
+        'isResolved': isResolved,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  factory ChildSchoolNeed.fromJson(Map<String, dynamic> json) =>
+      ChildSchoolNeed(
+        id: json['id'],
+        childId: json['childId'],
+        householdId: json['householdId'],
+        itemName: json['itemName'],
+        neededForDate: DateTime.parse(json['neededForDate']),
+        isResolved: json['isResolved'] ?? false,
+        createdAt: DateTime.parse(json['createdAt']),
+      );
+
+  ChildSchoolNeed copyWith({bool? isResolved}) => ChildSchoolNeed(
+        id: id,
+        childId: childId,
+        householdId: householdId,
+        itemName: itemName,
+        neededForDate: neededForDate,
+        isResolved: isResolved ?? this.isResolved,
+        createdAt: createdAt,
+      );
+}
+
 class ChildRoutineLog {
   final String id;
   final String childId;

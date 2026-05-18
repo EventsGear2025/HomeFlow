@@ -7,6 +7,7 @@ import '../models/user_model.dart';
 import '../models/household_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_constants.dart';
 
@@ -33,7 +34,117 @@ class AuthProvider extends ChangeNotifier {
   List<UserModel> get householdMembers => _householdMembers;
   List<UserModel> get managers =>
       _householdMembers.where((u) => u.role == UserRole.houseManager).toList();
+    List<UserModel> get homeowners =>
+      _householdMembers.where((u) => u.role == UserRole.owner).toList();
+    List<UserModel> get additionalHomeowners => homeowners
+      .where((u) => u.id != _household?.createdBy)
+      .toList();
   bool get isLoading => _isLoading;
+
+  /// Re-fetches household members from Supabase (and falls back to local cache).
+  /// Call this when the owner opens a screen that lists members, so newly
+  /// joined managers are visible without requiring an app restart.
+  Future<void> refreshHouseholdMembers() async {
+    if (_household == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await _loadHouseholdMembers(prefs);
+    notifyListeners();
+  }
+
+  Future<bool> refreshCurrentHouseholdAccess() async {
+    final supabaseUser = _supabaseAuthService.currentSupabaseUser;
+    final householdId =
+        _household?.id ?? _currentUser?.householdId ?? '';
+    if (supabaseUser == null || householdId.isEmpty) return false;
+
+    final membership = await SyncService.fetchMembership(
+      supabaseUser.id,
+      householdId: householdId,
+    );
+    if (membership != null) {
+      final membershipRole = _supabaseAuthService
+          .inferRoleValue(membership['role']?.toString());
+      final membershipName = membership['full_name']?.toString().trim();
+      final membershipEmail = membership['display_email']?.toString().trim();
+      final nextUser = (_currentUser ??
+              UserModel(
+                id: supabaseUser.id,
+                fullName: membershipName?.isNotEmpty == true
+                    ? membershipName!
+                    : (supabaseUser.userMetadata?['full_name']?.toString() ??
+                        supabaseUser.email?.split('@').first ??
+                        'HomeFlow User'),
+                email: membershipEmail?.isNotEmpty == true
+                    ? membershipEmail!
+                    : (supabaseUser.email ?? ''),
+                role: membershipRole,
+                householdId: householdId,
+              ))
+          .copyWith(
+        fullName: membershipName?.isNotEmpty == true
+            ? membershipName
+            : _currentUser?.fullName,
+        email: membershipEmail?.isNotEmpty == true
+            ? membershipEmail
+            : _currentUser?.email,
+        role: membershipRole,
+        householdId: householdId,
+      );
+      final changed = _currentUser == null ||
+          _currentUser!.role != nextUser.role ||
+          _currentUser!.householdId != nextUser.householdId ||
+          _currentUser!.fullName != nextUser.fullName ||
+          _currentUser!.email != nextUser.email;
+      _currentUser = nextUser;
+      if (changed) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+            'current_user', jsonEncode(_currentUser!.toJson()));
+        await _saveMember(_currentUser!, prefs);
+      }
+      return false;
+    }
+
+    final row = await SyncService.loadHousehold(householdId);
+    final isPrimaryOwner =
+        row?['owner_user_id']?.toString() == supabaseUser.id;
+    if (isPrimaryOwner) {
+      final fullName = _currentUser?.fullName.isNotEmpty == true
+          ? _currentUser!.fullName
+          : (supabaseUser.userMetadata?['full_name']?.toString().trim() ??
+              supabaseUser.email?.split('@').first ??
+              'Owner');
+      final displayEmail = _currentUser?.email.isNotEmpty == true
+          ? _currentUser!.email
+          : (supabaseUser.email ?? '');
+      try {
+        await SyncService.ensureHouseholdMember(
+          householdId,
+          'owner',
+          fullName: fullName,
+          displayEmail: displayEmail,
+        );
+      } catch (_) {}
+
+      _currentUser = (_currentUser ??
+              UserModel(
+                id: supabaseUser.id,
+                fullName: fullName,
+                email: displayEmail,
+                role: UserRole.owner,
+                householdId: householdId,
+              ))
+          .copyWith(role: UserRole.owner, householdId: householdId);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
+      await _saveMember(_currentUser!, prefs);
+      return false;
+    }
+
+    await _handleHouseholdAccessRevoked(householdId);
+    return true;
+  }
+
   bool get isLoggedIn => _currentUser != null;
   bool get isOwner => _currentUser?.isOwner ?? false;
   bool get isHouseManager => _currentUser?.isHouseManager ?? false;
@@ -67,22 +178,7 @@ class AuthProvider extends ChangeNotifier {
 
     final supabaseUser = _supabaseAuthService.currentSupabaseUser;
     if (supabaseUser != null) {
-      final householdId = supabaseUser.userMetadata?['household_id']?.toString() ?? '';
-      _currentUser = UserModel(
-        id: supabaseUser.id,
-        fullName: (supabaseUser.userMetadata?['full_name']?.toString().trim().isNotEmpty ?? false)
-            ? supabaseUser.userMetadata!['full_name'].toString().trim()
-            : (supabaseUser.email?.split('@').first ?? 'HomeFlow User'),
-        email: supabaseUser.email ?? '',
-        role: _supabaseAuthService.inferRoleFromMetadata(supabaseUser),
-        householdId: householdId,
-      );
-      if (householdId.isNotEmpty) {
-        final row = await SyncService.loadHousehold(householdId);
-        _household = row != null ? HouseholdModel.fromSupabaseRow(row) : null;
-      } else {
-        _household = null;
-      }
+      await _hydrateSupabaseSession(supabaseUser);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
       if (_household != null) {
@@ -104,16 +200,9 @@ class AuthProvider extends ChangeNotifier {
 
     if (userJson != null) {
       _currentUser = UserModel.fromJson(jsonDecode(userJson));
-    } else {
-      // Auto-login as demo owner on fresh install so all features are
-      // immediately visible without a manual login step.
-      final ownerJson = prefs.getString(
-          'household_member_${kBuildHouseholdId}_$kBuildOwnerId');
-      if (ownerJson != null) {
-        _currentUser = UserModel.fromJson(jsonDecode(ownerJson));
-        await prefs.setString('current_user', ownerJson);
-      }
     }
+    // New users (no stored session) are left unauthenticated so the splash
+    // routes them to the Sign Up screen.
 
     if (householdJson != null) {
       _household = HouseholdModel.fromJson(jsonDecode(householdJson));
@@ -204,7 +293,7 @@ class AuthProvider extends ChangeNotifier {
               id: hId,
               householdName: hhName,
               createdBy: supabaseUser.id,
-              ownerInviteCode: inviteCode,
+              managerInviteCode: inviteCode,
               createdAt: DateTime.now(),
             );
           } else {
@@ -233,7 +322,7 @@ class AuthProvider extends ChangeNotifier {
                     id: hId,
                     householdName: 'Household',
                     createdBy: '',
-                    ownerInviteCode: inviteCode,
+                    managerInviteCode: inviteCode,
                     createdAt: DateTime.now(),
                   );
           }
@@ -283,7 +372,7 @@ class AuthProvider extends ChangeNotifier {
         id: hId,
         householdName: householdName ?? "${fullName.split(' ').first}'s Home",
         createdBy: userId,
-        ownerInviteCode: inviteCode,
+        managerInviteCode: inviteCode,
         createdAt: DateTime.now(),
       );
       await prefs.setString('household', jsonEncode(_household!.toJson()));
@@ -336,20 +425,10 @@ class AuthProvider extends ChangeNotifier {
       ).timeout(const Duration(seconds: 6));
       final supabaseUser = _supabaseAuthService.currentSupabaseUser;
       if (supabaseUser != null) {
-        final hId = supabaseUser.userMetadata?['household_id']?.toString() ?? '';
-        _currentUser = UserModel(
-          id: supabaseUser.id,
-          fullName: (supabaseUser.userMetadata?['full_name']?.toString().trim().isNotEmpty ?? false)
-              ? supabaseUser.userMetadata!['full_name'].toString().trim()
-              : (supabaseUser.email?.split('@').first ?? 'HomeFlow User'),
-          email: supabaseUser.email ?? loginEmail,
-          role: _supabaseAuthService.inferRoleFromMetadata(supabaseUser),
-          householdId: hId,
+        await _hydrateSupabaseSession(
+          supabaseUser,
+          fallbackEmail: loginEmail,
         );
-        if (hId.isNotEmpty) {
-          final row = await SyncService.loadHousehold(hId);
-          if (row != null) _household = HouseholdModel.fromSupabaseRow(row);
-        }
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
         if (_household != null) {
@@ -413,6 +492,160 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// After a successful [login], call this to switch the active profile to the
+  /// house-manager role if the signed-in Supabase user also has a
+  /// house_manager row in app_household_members.
+  /// Returns true when the switch succeeded, false when no manager entry was
+  /// found (caller should show an error / revert to owner profile).
+  Future<bool> switchToManagerProfile() async {
+    final supabaseUser = _supabaseAuthService.currentSupabaseUser;
+    if (supabaseUser == null) return false;
+
+    final membership =
+        await SyncService.fetchManagerMembership(supabaseUser.id);
+    if (membership == null) return false;
+
+    final householdId = membership['household_id']?.toString() ?? '';
+    final fullName =
+        membership['full_name']?.toString().trim().isNotEmpty == true
+            ? membership['full_name'].toString().trim()
+            : _currentUser?.fullName ?? supabaseUser.email?.split('@').first ?? 'Home Manager';
+
+    if (householdId.isEmpty) return false;
+
+    final row = await SyncService.loadHousehold(householdId);
+    _household = row != null
+        ? HouseholdModel.fromSupabaseRow(row)
+        : null;
+
+    _currentUser = UserModel(
+      id: supabaseUser.id,
+      fullName: fullName,
+      email: supabaseUser.email ?? '',
+      role: UserRole.houseManager,
+      householdId: householdId,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
+    if (_household != null) {
+      final hJson = jsonEncode(_household!.toJson());
+      await prefs.setString('household', hJson);
+      await prefs.setString('household_${_household!.id}', hJson);
+    }
+    await _loadHouseholdMembers(prefs);
+    notifyListeners();
+    return true;
+  }
+
+  /// Update the current user's display name and (if owner) household name.
+  Future<void> updateProfile({
+    required String fullName,
+    String? householdName,
+    String? deliveryAddress,
+    String? deliveryContactName,
+    String? deliveryPhone,
+    String? deliverySmsNotes,
+    String? supermarketDeliveryNotes,
+  }) async {
+    if (_currentUser == null) return;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final trimmedName = fullName.trim();
+      final prefs = await SharedPreferences.getInstance();
+
+      // Update Supabase user metadata (display name).
+      await _supabaseAuthService.updateUserMetadata({'full_name': trimmedName});
+
+      // Update household details in Supabase if owner/co-owner and values changed.
+      if (isOwner && _household != null) {
+        final trimmedHousehold = householdName?.trim();
+        final normalizedAddress = deliveryAddress?.trim();
+        final normalizedContactName = deliveryContactName?.trim();
+        final normalizedPhone = deliveryPhone?.trim();
+        final normalizedSmsNotes = deliverySmsNotes?.trim();
+        final normalizedSupermarketNotes = supermarketDeliveryNotes?.trim();
+
+        final hasHouseholdUpdate =
+            (trimmedHousehold != null &&
+                trimmedHousehold.isNotEmpty &&
+                trimmedHousehold != _household!.householdName) ||
+            normalizedAddress != null ||
+            normalizedContactName != null ||
+            normalizedPhone != null ||
+            normalizedSmsNotes != null ||
+            normalizedSupermarketNotes != null;
+
+        if (hasHouseholdUpdate) {
+          try {
+            await SyncService.updateHouseholdDetails(
+              householdId: _household!.id,
+              householdName: trimmedHousehold != null &&
+                      trimmedHousehold.isNotEmpty &&
+                      trimmedHousehold != _household!.householdName
+                  ? trimmedHousehold
+                  : null,
+              deliveryAddress: normalizedAddress,
+              deliveryContactName: normalizedContactName,
+              deliveryPhone: normalizedPhone,
+              deliverySmsNotes: normalizedSmsNotes,
+              supermarketDeliveryNotes: normalizedSupermarketNotes,
+            );
+            _household = _household!.copyWith(
+              householdName: trimmedHousehold != null &&
+                      trimmedHousehold.isNotEmpty
+                  ? trimmedHousehold
+                  : null,
+              deliveryAddress: normalizedAddress?.isNotEmpty == true
+                  ? normalizedAddress
+                  : null,
+              deliveryContactName:
+                  normalizedContactName?.isNotEmpty == true
+                      ? normalizedContactName
+                      : null,
+              deliveryPhone:
+                  normalizedPhone?.isNotEmpty == true ? normalizedPhone : null,
+              deliverySmsNotes: normalizedSmsNotes?.isNotEmpty == true
+                  ? normalizedSmsNotes
+                  : null,
+              supermarketDeliveryNotes:
+                  normalizedSupermarketNotes?.isNotEmpty == true
+                      ? normalizedSupermarketNotes
+                      : null,
+              clearDeliveryAddress: normalizedAddress != null &&
+                  normalizedAddress.isEmpty,
+              clearDeliveryContactName:
+                  normalizedContactName != null && normalizedContactName.isEmpty,
+              clearDeliveryPhone:
+                  normalizedPhone != null && normalizedPhone.isEmpty,
+              clearDeliverySmsNotes:
+                  normalizedSmsNotes != null && normalizedSmsNotes.isEmpty,
+              clearSupermarketDeliveryNotes: normalizedSupermarketNotes != null &&
+                  normalizedSupermarketNotes.isEmpty,
+            );
+            await prefs.setString('household', jsonEncode(_household!.toJson()));
+            await prefs.setString(
+                'household_${_household!.id}', jsonEncode(_household!.toJson()));
+          } catch (e) {
+            debugPrint('[AuthProvider] updateHouseholdDetails error: $e');
+          }
+        }
+      }
+
+      // Update local user model and persist.
+      _currentUser = _currentUser!.copyWith(fullName: trimmedName);
+      await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
+      await _saveMember(_currentUser!, prefs);
+    } catch (e) {
+      debugPrint('[AuthProvider] updateProfile error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> addHouseManager({
     required String fullName,
     required String email,
@@ -446,6 +679,30 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update editable profile fields for a house manager (owner-only).
+  Future<void> updateManagerProfile({
+    required String userId,
+    String? idNumber,
+    DateTime? startDate,
+    int? leaveDaysTotal,
+    int? leaveDaysTaken,
+    String? managerNotes,
+  }) async {
+    if (_household == null) return;
+    await SyncService.updateManagerProfile(
+      householdId: _household!.id,
+      userId: userId,
+      idNumber: idNumber,
+      startDate: startDate,
+      leaveDaysTotal: leaveDaysTotal,
+      leaveDaysTaken: leaveDaysTaken,
+      managerNotes: managerNotes,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await _loadHouseholdMembers(prefs);
+    notifyListeners();
+  }
+
   /// Called when the manager chooses to leave the household.
   /// Revokes Supabase membership, clears local state, then signs out.
   Future<void> leaveHousehold() async {
@@ -466,13 +723,32 @@ class AuthProvider extends ChangeNotifier {
   }
 
   String get ownerInviteCode => _household?.ownerInviteCode ?? '';
+  String get managerInviteCode => _household?.managerInviteCode ?? '';
+  String get homeownerInviteCode => _household?.homeownerInviteCode ?? '';
+
+  /// Send a password-reset email via Supabase. Shows no error to the caller
+  /// if the email doesn't exist (security best practice).
+  Future<void> sendPasswordReset(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.isEmpty || !normalizedEmail.contains('@')) {
+      throw Exception('Enter a valid email address.');
+    }
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(normalizedEmail);
+    } catch (e) {
+      debugPrint('[AuthProvider] sendPasswordReset error: $e');
+      throw Exception(_friendlyAuthError(e));
+    }
+  }
 
   // ── Owner signup: step 1 – register only, no household yet ───────────────
-  Future<void> signUpOwner({
+  Future<bool> signUpOwner({
     required String fullName,
     required String email,
     required String password,
     required String householdName,
+    required String deliveryAddress,
+    String? deliveryPhone,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -491,8 +767,18 @@ class AuthProvider extends ChangeNotifier {
           'full_name': fullName,
           'role': 'owner',
           'pending_household': householdName,
+          'pending_delivery_address': deliveryAddress,
+          if (deliveryPhone?.trim().isNotEmpty == true)
+            'pending_delivery_phone': deliveryPhone!.trim(),
         },
       ).timeout(const Duration(seconds: 10));
+
+      if (resp.session != null) {
+        debugPrint('[signUpOwner] Immediate session - no email confirmation needed');
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
 
       // Supabase returns empty identities when the email is already registered
       // but unconfirmed. In that case, resend the OTP so the user can proceed.
@@ -512,6 +798,57 @@ class AuthProvider extends ChangeNotifier {
     }
     _isLoading = false;
     notifyListeners();
+    return true;
+  }
+
+  Future<bool> signUpAdditionalHomeownerPreStep({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail == kBuildOwnerEmail || normalizedEmail == kBuildManagerEmail) {
+      _isLoading = false;
+      notifyListeners();
+      throw Exception('This email is reserved. Please use a different email address.');
+    }
+    try {
+      debugPrint('[signUpAdditionalHomeownerPreStep] Signing up $normalizedEmail');
+      final resp = await _supabaseAuthService.signUp(
+        email: normalizedEmail,
+        password: password,
+        data: {
+          'full_name': fullName,
+          'role': 'owner',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (resp.session != null) {
+        debugPrint('[signUpAdditionalHomeownerPreStep] Immediate session');
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final identities = resp.user?.identities;
+      if (identities != null && identities.isEmpty) {
+        debugPrint('[signUpAdditionalHomeownerPreStep] User already exists, resending OTP');
+        await Supabase.instance.client.auth.resend(
+          type: OtpType.signup,
+          email: normalizedEmail,
+        ).timeout(const Duration(seconds: 10));
+      }
+    } catch (e) {
+      debugPrint('[signUpAdditionalHomeownerPreStep] error: $e');
+      _isLoading = false;
+      notifyListeners();
+      throw Exception(_friendlyAuthError(e));
+    }
+    _isLoading = false;
+    notifyListeners();
+    return true;
   }
 
   // ── Owner signup: step 2 – called after OTP verified ─────────────────────
@@ -519,6 +856,8 @@ class AuthProvider extends ChangeNotifier {
     required String fullName,
     required String email,
     required String householdName,
+    required String deliveryAddress,
+    String? deliveryPhone,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -526,10 +865,18 @@ class AuthProvider extends ChangeNotifier {
       final supabaseUser = _supabaseAuthService.currentSupabaseUser;
       if (supabaseUser == null) throw Exception('Session not found. Please sign in again.');
 
-      final inviteCode = _generateInviteCode();
+      final managerCode = _generateInviteCode();
+      var homeownerCode = _generateInviteCode();
+      while (homeownerCode == managerCode) {
+        homeownerCode = _generateInviteCode();
+      }
       final createdId = await SyncService.createHousehold(
         name: householdName,
-        inviteCode: inviteCode,
+        inviteCode: managerCode,
+        homeownerInviteCode: homeownerCode,
+        deliveryAddress: deliveryAddress.trim(),
+        deliveryContactName: fullName,
+        deliveryPhone: deliveryPhone?.trim(),
       );
       if (createdId == null) throw Exception('Household creation failed. Please try again.');
 
@@ -549,7 +896,13 @@ class AuthProvider extends ChangeNotifier {
         id: createdId,
         householdName: householdName,
         createdBy: supabaseUser.id,
-        ownerInviteCode: inviteCode,
+        managerInviteCode: managerCode,
+        homeownerInviteCode: homeownerCode,
+        deliveryAddress: deliveryAddress.trim(),
+        deliveryContactName: fullName,
+        deliveryPhone: deliveryPhone?.trim().isNotEmpty == true
+            ? deliveryPhone!.trim()
+            : null,
         createdAt: DateTime.now(),
       );
       _currentUser = UserModel(
@@ -575,8 +928,83 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Manager signup: step 1 – register email, send OTP (no household join yet)
-  Future<void> signUpManagerPreStep({
+  Future<void> completeAdditionalOwnerSetup({
+    required String fullName,
+    required String email,
+    required String inviteCode,
+  }) async {
+    final supabaseUser = _supabaseAuthService.currentSupabaseUser;
+    if (supabaseUser == null) {
+      throw Exception('Session not found. Please sign in again.');
+    }
+
+    final code = inviteCode.trim().toUpperCase();
+    if (code.length != 8) {
+      throw Exception('Invite codes are 8 characters — check with the homeowner.');
+    }
+
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final joinedId = await SyncService.joinHouseholdByInviteCode(
+        code,
+        userId: supabaseUser.id,
+        role: 'owner',
+      );
+      if (joinedId == null) {
+        throw Exception('Could not join household. Please check your connection and try again.');
+      }
+
+      await _supabaseAuthService.updateUserMetadata({
+        'household_id': joinedId,
+        'role': 'owner',
+        'full_name': fullName,
+      });
+      await SyncService.ensureHouseholdMember(
+        joinedId,
+        'owner',
+        fullName: fullName,
+        displayEmail: email.trim().toLowerCase(),
+      );
+
+      final row = await SyncService.loadHousehold(joinedId);
+      _household = row != null
+          ? HouseholdModel.fromSupabaseRow(row)
+          : HouseholdModel(
+              id: joinedId,
+              householdName: 'Household',
+              createdBy: '',
+              managerInviteCode: '',
+              homeownerInviteCode: code,
+              createdAt: DateTime.now(),
+            );
+      _currentUser = UserModel(
+        id: supabaseUser.id,
+        fullName: fullName,
+        email: email.trim().toLowerCase(),
+        role: UserRole.owner,
+        householdId: joinedId,
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
+      await prefs.setString('household', jsonEncode(_household!.toJson()));
+      await prefs.setString('household_${_household!.id}', jsonEncode(_household!.toJson()));
+      await _saveMember(_currentUser!, prefs);
+      await _loadHouseholdMembers(prefs);
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      throw Exception(_friendlyAuthError(e));
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // ── Manager signup: step 1 – create account, then verify by OTP if needed.
+  // Returns false when Supabase gives us a session immediately.
+  // Returns true when email verification is still required.
+  Future<bool> signUpManagerPreStep({
     required String fullName,
     required String email,
     required String password,
@@ -590,7 +1018,7 @@ class AuthProvider extends ChangeNotifier {
       throw Exception('This email is reserved. Please use a different email address.');
     }
     try {
-      debugPrint('[signUpManagerPreStep] Signing up with email: $normalizedEmail');
+      debugPrint('[signUpManagerPreStep] Signing up $normalizedEmail');
       final resp = await _supabaseAuthService.signUp(
         email: normalizedEmail,
         password: password,
@@ -600,6 +1028,18 @@ class AuthProvider extends ChangeNotifier {
         },
       ).timeout(const Duration(seconds: 10));
 
+      // If Supabase gave us a session immediately (email confirmation off),
+      // we're done — no further steps needed.
+      if (resp.session != null) {
+        debugPrint('[signUpManagerPreStep] Immediate session — no email confirmation needed');
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // Supabase returns empty identities when the email already exists but
+      // is still unconfirmed. In that case, force a fresh OTP just like the
+      // owner flow does, instead of relying on any earlier email.
       final identities = resp.user?.identities;
       if (identities != null && identities.isEmpty) {
         debugPrint('[signUpManagerPreStep] User already exists, resending OTP');
@@ -608,6 +1048,10 @@ class AuthProvider extends ChangeNotifier {
           email: normalizedEmail,
         ).timeout(const Duration(seconds: 10));
       }
+
+      // Do not join the household until OTP verification succeeds.
+      // This keeps the manager flow aligned with the working owner flow and
+      // avoids any extra side effects before the email token is verified.
     } catch (e) {
       debugPrint('[signUpManagerPreStep] error: $e');
       _isLoading = false;
@@ -616,40 +1060,88 @@ class AuthProvider extends ChangeNotifier {
     }
     _isLoading = false;
     notifyListeners();
+    // OTP email sent — caller navigates to ManagerOtpScreen.
+    return true;
   }
 
-  // ── Manager signup: step 2 – called after OTP verified, joins household ──
+  // ── Manager signup: step 2 – called after OTP verified ──────────────────
   Future<void> completeManagerSetup({
     required String fullName,
     required String email,
-    required String inviteCode,
   }) async {
     _isLoading = true;
     notifyListeners();
     try {
       final supabaseUser = _supabaseAuthService.currentSupabaseUser;
       if (supabaseUser == null) throw Exception('Session not found. Please sign in again.');
+      await _supabaseAuthService.updateUserMetadata({
+        'role': 'house_manager',
+        'full_name': fullName,
+      });
+      _household = null;
+      _currentUser = UserModel(
+        id: supabaseUser.id,
+        fullName: fullName,
+        email: email.trim().toLowerCase(),
+        role: UserRole.houseManager,
+        householdId: '',
+      );
 
-      final code = inviteCode.trim().toUpperCase();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
+      await prefs.remove('household');
+      await _saveMember(_currentUser!, prefs);
+      await _loadHouseholdMembers(prefs);
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      throw Exception(_friendlyAuthError(e));
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> joinHouseholdAsManager({required String inviteCode}) async {
+    final supabaseUser = _supabaseAuthService.currentSupabaseUser;
+    if (supabaseUser == null) {
+      throw Exception('Session not found. Please sign in again.');
+    }
+
+    final code = inviteCode.trim().toUpperCase();
+    if (code.length != 8) {
+      throw Exception('Invite codes are 8 characters — check with the homeowner.');
+    }
+
+    _isLoading = true;
+    notifyListeners();
+    try {
       final joinedId = await SyncService.joinHouseholdByInviteCode(
         code,
         userId: supabaseUser.id,
+        role: 'house_manager',
       );
       if (joinedId == null) {
         throw Exception('Could not join household. Please check your connection and try again.');
       }
+
+      final fullName = _currentUser?.fullName ??
+          supabaseUser.userMetadata?['full_name']?.toString().trim() ??
+          supabaseUser.email?.split('@').first ??
+          'House Manager';
+      final displayEmail = _currentUser?.email.isNotEmpty == true
+          ? _currentUser!.email
+          : (supabaseUser.email ?? '');
 
       await _supabaseAuthService.updateUserMetadata({
         'household_id': joinedId,
         'role': 'house_manager',
         'full_name': fullName,
       });
-      // Store name+email in the members table so the owner can see them.
       await SyncService.ensureHouseholdMember(
         joinedId,
         'house_manager',
         fullName: fullName,
-        displayEmail: email.trim().toLowerCase(),
+        displayEmail: displayEmail,
       );
 
       final row = await SyncService.loadHousehold(joinedId);
@@ -659,13 +1151,13 @@ class AuthProvider extends ChangeNotifier {
               id: joinedId,
               householdName: 'Household',
               createdBy: '',
-              ownerInviteCode: code,
+              managerInviteCode: code,
               createdAt: DateTime.now(),
             );
       _currentUser = UserModel(
         id: supabaseUser.id,
         fullName: fullName,
-        email: email.trim().toLowerCase(),
+        email: displayEmail,
         role: UserRole.houseManager,
         householdId: joinedId,
       );
@@ -673,6 +1165,7 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
       await prefs.setString('household', jsonEncode(_household!.toJson()));
+      await prefs.setString('household_${_household!.id}', jsonEncode(_household!.toJson()));
       await _saveMember(_currentUser!, prefs);
       await _loadHouseholdMembers(prefs);
     } catch (e) {
@@ -717,6 +1210,7 @@ class AuthProvider extends ChangeNotifier {
       final joinedId = await SyncService.joinHouseholdByInviteCode(
         code,
         userId: supabaseUser.id,
+        role: 'house_manager',
       );
       if (joinedId == null) {
         throw Exception('Could not join household. Please check your connection and try again.');
@@ -729,6 +1223,15 @@ class AuthProvider extends ChangeNotifier {
         'full_name': fullName,
         'phone': normalizedPhone,
       });
+      // Store name + phone in the members table so the owner can see them in
+      // the Staff section. The RPC creates the row without display fields, so
+      // we upsert here with the full details.
+      await SyncService.ensureHouseholdMember(
+        joinedId,
+        'house_manager',
+        fullName: fullName,
+        displayEmail: normalizedPhone,
+      );
 
       final row = await SyncService.loadHousehold(joinedId);
       _household = row != null
@@ -737,7 +1240,7 @@ class AuthProvider extends ChangeNotifier {
               id: joinedId,
               householdName: 'Household',
               createdBy: '',
-              ownerInviteCode: code,
+              managerInviteCode: code,
               createdAt: DateTime.now(),
             );
       _currentUser = UserModel(
@@ -789,24 +1292,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    final hId = supabaseUser.userMetadata?['household_id']?.toString() ?? '';
-    final fullName = (supabaseUser.userMetadata?['full_name']?.toString().trim().isNotEmpty ?? false)
-        ? supabaseUser.userMetadata!['full_name'].toString().trim()
-        : (supabaseUser.email?.split('@').first ?? 'Owner');
-
-    _currentUser = UserModel(
-      id: supabaseUser.id,
-      fullName: fullName,
-      email: supabaseUser.email ?? '',
-      role: UserRole.owner,
-      householdId: hId,
-    );
-    _household = null;
-
-    if (hId.isNotEmpty) {
-      final row = await SyncService.loadHousehold(hId);
-      if (row != null) _household = HouseholdModel.fromSupabaseRow(row);
-    }
+    await _hydrateSupabaseSession(supabaseUser);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('current_user', jsonEncode(_currentUser!.toJson()));
@@ -869,7 +1355,8 @@ class AuthProvider extends ChangeNotifier {
       id: kBuildHouseholdId,
       householdName: 'HomeFlow Demo Home',
       createdBy: kBuildOwnerId,
-      ownerInviteCode: kBuildManagerInviteCode,
+      managerInviteCode: kBuildManagerInviteCode,
+      homeownerInviteCode: 'HFHOME01',
       createdAt: DateTime(2026, 3, 23),
     );
     final owner = UserModel(
@@ -939,27 +1426,189 @@ class AuthProvider extends ChangeNotifier {
     );
   }
 
+  Future<void> _hydrateSupabaseSession(
+    User supabaseUser, {
+    String? fallbackEmail,
+  }) async {
+    var householdId =
+        supabaseUser.userMetadata?['household_id']?.toString() ?? '';
+    var role = _supabaseAuthService.inferRoleFromMetadata(supabaseUser);
+    var fullName =
+        (supabaseUser.userMetadata?['full_name']?.toString().trim().isNotEmpty ??
+                false)
+            ? supabaseUser.userMetadata!['full_name'].toString().trim()
+            : (supabaseUser.email?.split('@').first ?? 'HomeFlow User');
+    var displayEmail = supabaseUser.email ?? fallbackEmail ?? '';
+
+    if (householdId.isEmpty) {
+      final membership = await SyncService.fetchMembership(supabaseUser.id);
+      if (membership != null) {
+        final recoveredHouseholdId =
+            membership['household_id']?.toString() ?? '';
+        if (recoveredHouseholdId.isNotEmpty) {
+          householdId = recoveredHouseholdId;
+          role = _supabaseAuthService
+              .inferRoleValue(membership['role']?.toString());
+          final recoveredName = membership['full_name']?.toString().trim();
+          final recoveredEmail =
+              membership['display_email']?.toString().trim();
+          if (recoveredName?.isNotEmpty == true) {
+            fullName = recoveredName!;
+          }
+          if (recoveredEmail?.isNotEmpty == true) {
+            displayEmail = recoveredEmail!;
+          }
+          try {
+            await _supabaseAuthService.updateUserMetadata({
+              'household_id': householdId,
+              'role': _roleValue(role),
+              'full_name': fullName,
+            });
+          } catch (_) {}
+        }
+      }
+    }
+
+    _currentUser = UserModel(
+      id: supabaseUser.id,
+      fullName: fullName,
+      email: displayEmail,
+      role: role,
+      householdId: householdId,
+    );
+    _household = null;
+
+    if (householdId.isNotEmpty) {
+      final row = await SyncService.loadHousehold(householdId);
+      _household = row != null ? HouseholdModel.fromSupabaseRow(row) : null;
+      try {
+        await SyncService.ensureHouseholdMember(
+          householdId,
+          _roleValue(role),
+          fullName: fullName,
+          displayEmail: displayEmail,
+        );
+      } catch (_) {}
+      await _ensureHomeownerInviteCode();
+    }
+  }
+
+  Future<void> _ensureHomeownerInviteCode() async {
+    if (!isOwner || _household == null) return;
+    if (_household!.homeownerInviteCode.trim().isNotEmpty) return;
+
+    var code = _generateInviteCode();
+    while (code == _household!.managerInviteCode) {
+      code = _generateInviteCode();
+    }
+
+    if (SyncService.isAvailable) {
+      try {
+        await SyncService.updateHouseholdDetails(
+          householdId: _household!.id,
+          homeownerInviteCode: code,
+        );
+      } catch (e) {
+        debugPrint('[AuthProvider] homeowner invite backfill failed: $e');
+      }
+    }
+
+    _household = _household!.copyWith(homeownerInviteCode: code);
+    final prefs = await SharedPreferences.getInstance();
+    final householdJson = jsonEncode(_household!.toJson());
+    await prefs.setString('household', householdJson);
+    await prefs.setString('household_${_household!.id}', householdJson);
+  }
+
+  String _roleValue(UserRole role) =>
+      role == UserRole.owner ? 'owner' : 'house_manager';
+
+  Future<void> _handleHouseholdAccessRevoked(String householdId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _purgeHouseholdCache(prefs, householdId);
+    try {
+      await _supabaseAuthService.updateUserMetadata({'household_id': null});
+    } catch (_) {}
+    await _supabaseAuthService.signOut();
+    _currentUser = null;
+    _household = null;
+    _householdMembers = [];
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> _purgeHouseholdCache(
+    SharedPreferences prefs,
+    String householdId,
+  ) async {
+    final keysToRemove = prefs.getKeys().where((key) {
+      if (key == 'household') return true;
+      if (key == 'household_$householdId') return true;
+      if (key.startsWith('household_member_${householdId}_')) return true;
+      return key.endsWith('_$householdId');
+    }).toList();
+    for (final key in keysToRemove) {
+      await prefs.remove(key);
+    }
+    await prefs.remove('current_user');
+  }
+
   Future<void> _loadHouseholdMembers(SharedPreferences prefs) async {
     if (_household == null) {
       _householdMembers = [];
       return;
     }
 
+    final allKeys = prefs.getKeys();
+    final prefix = 'household_member_${_household!.id}_';
+    final cachedMembers = allKeys
+        .where((k) => k.startsWith(prefix))
+        .map((k) => prefs.getString(k))
+        .whereType<String>()
+        .map((json) => UserModel.fromJson(jsonDecode(json)))
+        .toList();
+
+    Map<String, UserModel> mergeMembers(Iterable<UserModel> members) {
+      final byId = <String, UserModel>{};
+      for (final member in members) {
+        byId[member.id] = member;
+      }
+      return byId;
+    }
+
     // Try Supabase first — this is the source of truth and ensures the owner
     // sees managers who joined on other devices (and vice versa).
     final rows = await SyncService.fetchHouseholdMembers(_household!.id);
     if (rows != null && rows.isNotEmpty) {
-      _householdMembers = rows.map((row) {
+      final remoteMembers = rows.map((row) {
         final roleStr = row['role'] as String? ?? 'owner';
+        DateTime? startDate;
+        final sdRaw = row['start_date'];
+        if (sdRaw != null) {
+          try { startDate = DateTime.parse(sdRaw.toString()); } catch (_) {}
+        }
         return UserModel(
           id: (row['user_id'] as Object).toString(),
           fullName: row['full_name'] as String? ?? '',
           email: row['display_email'] as String? ?? '',
           role: roleStr == 'owner' ? UserRole.owner : UserRole.houseManager,
           householdId: (row['household_id'] as Object).toString(),
+          idNumber: row['id_number'] as String?,
+          startDate: startDate,
+          leaveDaysTotal: row['leave_days_total'] as int? ?? 21,
+          leaveDaysTaken: row['leave_days_taken'] as int? ?? 0,
+          managerNotes: row['manager_notes'] as String?,
         );
-      }).toList()
+      }).toList();
+
+      final merged = mergeMembers(cachedMembers);
+      for (final member in remoteMembers) {
+        merged[member.id] = member;
+      }
+
+      _householdMembers = merged.values.toList()
         ..sort((a, b) => a.fullName.compareTo(b.fullName));
+
       // Persist to local cache for offline use.
       for (final m in _householdMembers) {
         await _saveMember(m, prefs);
@@ -968,33 +1617,29 @@ class AuthProvider extends ChangeNotifier {
     }
 
     // Fall back to local SharedPreferences when Supabase is unavailable.
-    final allKeys = prefs.getKeys();
-    final prefix = 'household_member_${_household!.id}_';
-    _householdMembers = allKeys
-        .where((k) => k.startsWith(prefix))
-        .map((k) => prefs.getString(k))
-        .whereType<String>()
-        .map((json) => UserModel.fromJson(jsonDecode(json)))
-        .toList()
+    _householdMembers = cachedMembers
       ..sort((a, b) => a.fullName.compareTo(b.fullName));
   }
 
   Future<HouseholdModel?> _findHouseholdByInviteCode(
       SharedPreferences prefs, String? inviteCode) async {
     if (inviteCode == null || inviteCode.isEmpty) return null;
+    final normalizedCode = inviteCode.trim().toUpperCase();
     final keys = prefs.getKeys();
     for (final key in keys.where((k) => k.startsWith('household_'))) {
       final json = prefs.getString(key);
       if (json == null) continue;
       final household = HouseholdModel.fromJson(jsonDecode(json));
-      if (household.ownerInviteCode.toUpperCase() == inviteCode) {
+      if (household.ownerInviteCode.toUpperCase() == normalizedCode ||
+          household.homeownerInviteCode.toUpperCase() == normalizedCode) {
         return household;
       }
     }
     final current = prefs.getString('household');
     if (current != null) {
       final household = HouseholdModel.fromJson(jsonDecode(current));
-      if (household.ownerInviteCode.toUpperCase() == inviteCode) {
+      if (household.ownerInviteCode.toUpperCase() == normalizedCode ||
+          household.homeownerInviteCode.toUpperCase() == normalizedCode) {
         return household;
       }
     }

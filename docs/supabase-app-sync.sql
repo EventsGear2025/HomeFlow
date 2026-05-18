@@ -44,13 +44,25 @@ create table if not exists public.app_households (
   id uuid primary key default gen_random_uuid(),
   household_name text not null,
   invite_code text not null unique,
+  homeowner_invite_code text unique,
   owner_user_id uuid references auth.users(id) on delete set null,
+  delivery_address text,
+  delivery_contact_name text,
+  delivery_phone text,
+  delivery_sms_notes text,
+  supermarket_delivery_notes text,
   plan_code text not null default 'free' check (plan_code in ('free', 'home_pro')),
   plan_status text not null default 'active' check (plan_status in ('active', 'grace_period', 'expired', 'cancelled')),
   plan_expires_at timestamptz,
   created_at timestamptz default now()
 );
 
+alter table public.app_households add column if not exists homeowner_invite_code text;
+alter table public.app_households add column if not exists delivery_address text;
+alter table public.app_households add column if not exists delivery_contact_name text;
+alter table public.app_households add column if not exists delivery_phone text;
+alter table public.app_households add column if not exists delivery_sms_notes text;
+alter table public.app_households add column if not exists supermarket_delivery_notes text;
 alter table public.app_households add column if not exists plan_code text;
 alter table public.app_households add column if not exists plan_status text;
 alter table public.app_households add column if not exists plan_expires_at timestamptz;
@@ -60,10 +72,16 @@ set plan_code = coalesce(plan_code, 'free'),
     plan_status = coalesce(plan_status, 'active')
 where plan_code is null or plan_status is null;
 
+update public.app_households
+set homeowner_invite_code = coalesce(nullif(homeowner_invite_code, ''), invite_code)
+where homeowner_invite_code is null or homeowner_invite_code = '';
+
 alter table public.app_households alter column plan_code set default 'free';
 alter table public.app_households alter column plan_status set default 'active';
 
 create index if not exists idx_app_hh_invite on public.app_households (invite_code);
+create unique index if not exists idx_app_hh_homeowner_invite
+  on public.app_households (homeowner_invite_code);
 create index if not exists idx_app_hh_owner  on public.app_households (owner_user_id);
 
 alter table public.app_households enable row level security;
@@ -78,6 +96,8 @@ create table if not exists public.app_household_members (
   household_id text not null,
   user_id uuid not null references auth.users(id) on delete cascade,
   role text not null check (role in ('owner', 'house_manager')),
+  full_name text,
+  display_email text,
   created_at timestamptz default now(),
   unique (household_id, user_id)
 );
@@ -115,7 +135,19 @@ create policy "app_hm_ins" on public.app_household_members
 
 drop policy if exists "app_hm_del" on public.app_household_members;
 create policy "app_hm_del" on public.app_household_members
-  for delete using (user_id = auth.uid());
+  for delete using (
+    user_id = auth.uid()
+    or (
+      role = 'house_manager'
+      and exists (
+        select 1
+        from public.app_household_members owner_member
+        where owner_member.household_id = app_household_members.household_id
+          and owner_member.user_id = auth.uid()
+          and owner_member.role = 'owner'
+      )
+    )
+  );
 
 -- RLS policies for app_households (defined here, after app_household_members exists)
 drop policy if exists "app_hh_sel" on public.app_households;
@@ -131,7 +163,26 @@ create policy "app_hh_ins" on public.app_households for insert
 
 drop policy if exists "app_hh_upd" on public.app_households;
 create policy "app_hh_upd" on public.app_households for update
-  using (owner_user_id = auth.uid());
+  using (
+    owner_user_id = auth.uid()
+    or exists (
+      select 1
+      from public.app_household_members owner_member
+      where owner_member.household_id = app_households.id::text
+        and owner_member.user_id = auth.uid()
+        and owner_member.role = 'owner'
+    )
+  )
+  with check (
+    owner_user_id = auth.uid()
+    or exists (
+      select 1
+      from public.app_household_members owner_member
+      where owner_member.household_id = app_households.id::text
+        and owner_member.user_id = auth.uid()
+        and owner_member.role = 'owner'
+    )
+  );
 
 -- ============================================================
 -- APP UPGRADE REQUESTS TABLE
@@ -187,17 +238,19 @@ $$;
 
 -- ============================================================
 -- RPC: Join a household by invite code.
--- Managers call this during signup. SECURITY DEFINER so it can
--- look up app_households without a prior membership.
+-- Managers and additional homeowners call this during signup.
+-- SECURITY DEFINER so it can look up app_households without a prior membership.
 -- p_user_id is passed explicitly from the client right after signUp,
 -- before a Supabase session is established (email-confirm flow).
 -- Falls back to auth.uid() when called from an authenticated session.
 -- Returns the household_id (UUID as text) on success.
 -- ============================================================
 drop function if exists public.join_household_by_invite(text);
+drop function if exists public.join_household_by_invite(text, uuid);
 create or replace function public.join_household_by_invite(
   invite    text,
-  p_user_id uuid default null
+  p_user_id uuid default null,
+  p_role    text default 'house_manager'
 )
 returns text
 language plpgsql
@@ -213,9 +266,20 @@ begin
     raise exception 'Not authenticated';
   end if;
 
+  if lower(coalesce(p_role, '')) not in ('house_manager', 'owner') then
+    raise exception 'Invalid role: %', p_role;
+  end if;
+
   select id::text into hid
     from public.app_households
-    where upper(invite_code) = upper(invite)
+    where (
+      lower(p_role) = 'house_manager'
+      and upper(invite_code) = upper(invite)
+    )
+    or (
+      lower(p_role) = 'owner'
+      and upper(coalesce(homeowner_invite_code, '')) = upper(invite)
+    )
     limit 1;
 
   if hid is null then
@@ -223,15 +287,15 @@ begin
   end if;
 
   insert into public.app_household_members (household_id, user_id, role)
-  values (hid, uid, 'house_manager')
-  on conflict (household_id, user_id) do nothing;
+  values (hid, uid, lower(p_role))
+  on conflict (household_id, user_id) do update set role = excluded.role;
 
   return hid;
 end;
 $$;
 
 -- Allow anon (pre-session signup) and authenticated callers to invoke this RPC.
-grant execute on function public.join_household_by_invite(text, uuid) to anon, authenticated;
+grant execute on function public.join_household_by_invite(text, uuid, text) to anon, authenticated;
 
 -- ============================================================
 -- FEATURE DATA TABLES
@@ -368,5 +432,11 @@ end $$;
 -- DONE
 -- Tables: app_households, app_household_members + 11 feature tables
 -- RLS: household-member-based access on all tables
+
+-- ============================================================
+-- Enable Realtime for the notifications table
+-- Run this once in the Supabase SQL editor (idempotent).
+-- ============================================================
+alter publication supabase_realtime add table public.app_notifications;
 -- RPC: join_household_by_invite(invite TEXT) → TEXT
 -- ============================================================

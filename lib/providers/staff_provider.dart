@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/staff_schedule.dart';
 import '../models/app_notification.dart';
 import '../models/supply_item.dart';
 import '../services/sync_service.dart';
+import '../services/supabase_service.dart';
 
 class StaffProvider extends ChangeNotifier {
   StaffSchedule? _schedule;
@@ -50,6 +52,8 @@ class StaffProvider extends ChangeNotifier {
 
 class NotificationProvider extends ChangeNotifier {
   List<AppNotification> _notifications = [];
+  RealtimeChannel? _realtimeChannel;
+  String? _subscribedHouseholdId;
 
   List<AppNotification> get notifications => _notifications;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
@@ -71,6 +75,77 @@ class NotificationProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
+    _subscribeRealtime(householdId);
+  }
+
+  void _subscribeRealtime(String householdId) {
+    if (_subscribedHouseholdId == householdId && _realtimeChannel != null) {
+      return;
+    }
+    _realtimeChannel?.unsubscribe();
+    _subscribedHouseholdId = householdId;
+
+    _realtimeChannel = SupabaseService.client
+        .channel('app_notifications_$householdId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'app_notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'household_id',
+            value: householdId,
+          ),
+          callback: (payload) {
+            final data = payload.newRecord['data'];
+            if (data == null) return;
+            try {
+              final notification = AppNotification.fromJson(
+                  Map<String, dynamic>.from(data as Map));
+              if (!_notifications.any((n) => n.id == notification.id)) {
+                _notifications.insert(0, notification);
+                notifyListeners();
+              }
+            } catch (e) {
+              debugPrint('[NotificationProvider] realtime INSERT parse error: $e');
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'app_notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'household_id',
+            value: householdId,
+          ),
+          callback: (payload) {
+            final data = payload.newRecord['data'];
+            if (data == null) return;
+            try {
+              final updated = AppNotification.fromJson(
+                  Map<String, dynamic>.from(data as Map));
+              final idx = _notifications.indexWhere((n) => n.id == updated.id);
+              if (idx != -1) {
+                _notifications[idx].isRead = updated.isRead;
+                notifyListeners();
+              }
+            } catch (e) {
+              debugPrint('[NotificationProvider] realtime UPDATE parse error: $e');
+            }
+          },
+        )
+        .subscribe((status, [error]) {
+          debugPrint('[NotificationProvider] realtime status: $status'
+              '${error != null ? ', error: $error' : ''}');
+        });
+  }
+
+  void cancelSubscription() {
+    _realtimeChannel?.unsubscribe();
+    _realtimeChannel = null;
+    _subscribedHouseholdId = null;
   }
 
   Future<void> addNotification(

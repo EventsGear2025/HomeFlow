@@ -21,7 +21,13 @@ class HouseholdModel {
   final String createdBy;
   final PlanType planType;
   final PlanStatus planStatus;
-  final String ownerInviteCode;
+  final String managerInviteCode;
+  final String homeownerInviteCode;
+  final String? deliveryAddress;
+  final String? deliveryContactName;
+  final String? deliveryPhone;
+  final String? deliverySmsNotes;
+  final String? supermarketDeliveryNotes;
   final DateTime createdAt;
   final DateTime? planExpiresAt;
 
@@ -31,7 +37,13 @@ class HouseholdModel {
     required this.createdBy,
     this.planType = PlanType.free,
     this.planStatus = PlanStatus.active,
-    required this.ownerInviteCode,
+    required this.managerInviteCode,
+    this.homeownerInviteCode = '',
+    this.deliveryAddress,
+    this.deliveryContactName,
+    this.deliveryPhone,
+    this.deliverySmsNotes,
+    this.supermarketDeliveryNotes,
     required this.createdAt,
     this.planExpiresAt,
   });
@@ -40,6 +52,10 @@ class HouseholdModel {
       planType == PlanType.homePro &&
       planStatus != PlanStatus.expired &&
       planStatus != PlanStatus.cancelled;
+
+  // Backward-compatible alias used across the existing UI for the
+  // manager/staff invite code.
+  String get ownerInviteCode => managerInviteCode;
 
   String get planLabel => isHomePro ? 'Home Pro' : 'Free';
   String get planStatusLabel => householdPlanStatusLabel(planStatus);
@@ -50,7 +66,16 @@ class HouseholdModel {
     'createdBy': createdBy,
     'planType': planType.name,
     'planStatus': planStatus.name,
-    'ownerInviteCode': ownerInviteCode,
+    'managerInviteCode': managerInviteCode,
+    'ownerInviteCode': managerInviteCode,
+    'homeownerInviteCode': homeownerInviteCode,
+    if (deliveryAddress != null) 'deliveryAddress': deliveryAddress,
+    if (deliveryContactName != null)
+      'deliveryContactName': deliveryContactName,
+    if (deliveryPhone != null) 'deliveryPhone': deliveryPhone,
+    if (deliverySmsNotes != null) 'deliverySmsNotes': deliverySmsNotes,
+    if (supermarketDeliveryNotes != null)
+      'supermarketDeliveryNotes': supermarketDeliveryNotes,
     'createdAt': createdAt.toIso8601String(),
     if (planExpiresAt != null)
       'planExpiresAt': planExpiresAt!.toIso8601String(),
@@ -62,7 +87,15 @@ class HouseholdModel {
     createdBy: json['createdBy'],
     planType: _parsePlanType(json['planType']),
     planStatus: _parsePlanStatus(json['planStatus']),
-    ownerInviteCode: json['ownerInviteCode'] ?? '',
+    managerInviteCode:
+      json['managerInviteCode'] ?? json['ownerInviteCode'] ?? '',
+    homeownerInviteCode: json['homeownerInviteCode'] ?? '',
+    deliveryAddress: json['deliveryAddress'] as String?,
+    deliveryContactName: json['deliveryContactName'] as String?,
+    deliveryPhone: json['deliveryPhone'] as String?,
+    deliverySmsNotes: json['deliverySmsNotes'] as String?,
+    supermarketDeliveryNotes:
+      json['supermarketDeliveryNotes'] as String?,
     createdAt: DateTime.parse(json['createdAt']),
     planExpiresAt: json['planExpiresAt'] != null
         ? DateTime.tryParse(json['planExpiresAt'])
@@ -78,7 +111,16 @@ class HouseholdModel {
         createdBy: row['owner_user_id']?.toString() ?? '',
         planType: _parsePlanType(row['plan_code']),
         planStatus: _parsePlanStatus(row['plan_status']),
-        ownerInviteCode: row['invite_code']?.toString() ?? '',
+        managerInviteCode: row['invite_code']?.toString() ?? '',
+        homeownerInviteCode:
+          row['homeowner_invite_code']?.toString() ?? '',
+        deliveryAddress:
+          row['delivery_address']?.toString() ?? row['address']?.toString(),
+        deliveryContactName: row['delivery_contact_name']?.toString(),
+        deliveryPhone: row['delivery_phone']?.toString(),
+        deliverySmsNotes: row['delivery_sms_notes']?.toString(),
+        supermarketDeliveryNotes:
+          row['supermarket_delivery_notes']?.toString(),
         createdAt: row['created_at'] != null
             ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
             : DateTime.now(),
@@ -119,8 +161,19 @@ class HouseholdModel {
     String? householdName,
     PlanType? planType,
     PlanStatus? planStatus,
-    String? ownerInviteCode,
+    String? managerInviteCode,
+    String? homeownerInviteCode,
+    String? deliveryAddress,
+    String? deliveryContactName,
+    String? deliveryPhone,
+    String? deliverySmsNotes,
+    String? supermarketDeliveryNotes,
     DateTime? planExpiresAt,
+    bool clearDeliveryAddress = false,
+    bool clearDeliveryContactName = false,
+    bool clearDeliveryPhone = false,
+    bool clearDeliverySmsNotes = false,
+    bool clearSupermarketDeliveryNotes = false,
     bool clearExpiry = false,
   }) => HouseholdModel(
     id: id,
@@ -128,7 +181,22 @@ class HouseholdModel {
     createdBy: createdBy,
     planType: planType ?? this.planType,
     planStatus: planStatus ?? this.planStatus,
-    ownerInviteCode: ownerInviteCode ?? this.ownerInviteCode,
+    managerInviteCode: managerInviteCode ?? this.managerInviteCode,
+    homeownerInviteCode:
+      homeownerInviteCode ?? this.homeownerInviteCode,
+    deliveryAddress:
+      clearDeliveryAddress ? null : (deliveryAddress ?? this.deliveryAddress),
+    deliveryContactName: clearDeliveryContactName
+      ? null
+      : (deliveryContactName ?? this.deliveryContactName),
+    deliveryPhone:
+      clearDeliveryPhone ? null : (deliveryPhone ?? this.deliveryPhone),
+    deliverySmsNotes: clearDeliverySmsNotes
+      ? null
+      : (deliverySmsNotes ?? this.deliverySmsNotes),
+    supermarketDeliveryNotes: clearSupermarketDeliveryNotes
+      ? null
+      : (supermarketDeliveryNotes ?? this.supermarketDeliveryNotes),
     createdAt: createdAt,
     planExpiresAt: clearExpiry ? null : (planExpiresAt ?? this.planExpiresAt),
   );

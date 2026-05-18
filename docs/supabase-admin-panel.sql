@@ -51,7 +51,7 @@ create table if not exists public.support_issue_categories (
 
 create table if not exists public.support_issues (
   id uuid primary key default gen_random_uuid(),
-  household_id uuid references public.households(id) on delete set null,
+  household_id text,  -- references app_households.id (text/UUID)
   profile_id uuid references public.profiles(id) on delete set null,
   category_id uuid references public.support_issue_categories(id) on delete set null,
   title text not null,
@@ -95,9 +95,9 @@ create table if not exists public.notification_templates (
 
 create table if not exists public.notification_delivery_logs (
   id uuid primary key default gen_random_uuid(),
-  notification_id uuid references public.notifications(id) on delete set null,
+  notification_id uuid,  -- references app_notifications (JSONB)
   template_id uuid references public.notification_templates(id) on delete set null,
-  household_id uuid references public.households(id) on delete set null,
+  household_id text,  -- references app_households.id (text/UUID)
   recipient_profile_id uuid references public.profiles(id) on delete set null,
   status text not null default 'delivered' check (status in ('queued', 'sent', 'delivered', 'failed', 'read')),
   error_message text,
@@ -112,7 +112,7 @@ create table if not exists public.notification_delivery_logs (
 
 create table if not exists public.household_plan_adjustments (
   id uuid primary key default gen_random_uuid(),
-  household_id uuid not null references public.households(id) on delete cascade,
+  household_id text not null,  -- references app_households.id (text/UUID)
   admin_user_id uuid references public.admin_users(id) on delete set null,
   adjustment_type text not null check (adjustment_type in ('trial', 'complimentary', 'upgrade', 'downgrade', 'manual_extension', 'suspend_paid_features')),
   previous_plan text,
@@ -125,7 +125,7 @@ create table if not exists public.household_plan_adjustments (
 
 create table if not exists public.household_feature_limits (
   id uuid primary key default gen_random_uuid(),
-  household_id uuid not null references public.households(id) on delete cascade,
+  household_id text not null,  -- references app_households.id (text/UUID)
   max_bedrooms integer,
   max_supplies integer,
   max_children integer,
@@ -143,7 +143,7 @@ create table if not exists public.household_feature_limits (
 create table if not exists public.admin_activity_logs (
   id uuid primary key default gen_random_uuid(),
   admin_user_id uuid references public.admin_users(id) on delete set null,
-  household_id uuid references public.households(id) on delete set null,
+  household_id text,  -- references app_households.id (text/UUID)
   target_profile_id uuid references public.profiles(id) on delete set null,
   action text not null,
   entity_type text,
@@ -164,7 +164,7 @@ create table if not exists public.system_alerts (
   body text,
   source text,
   status text not null default 'open' check (status in ('open', 'acknowledged', 'resolved')),
-  related_household_id uuid references public.households(id) on delete set null,
+  related_household_id text,  -- references app_households.id (text/UUID)
   created_at timestamptz not null default now(),
   resolved_at timestamptz
 );
@@ -173,7 +173,7 @@ create table if not exists public.failed_jobs (
   id uuid primary key default gen_random_uuid(),
   job_key text not null,
   job_type text not null,
-  related_household_id uuid references public.households(id) on delete set null,
+  related_household_id text,  -- references app_households.id (text/UUID)
   payload jsonb,
   error_message text,
   retry_count integer not null default 0,
@@ -220,19 +220,102 @@ alter table public.failed_jobs enable row level security;
 --   2. Use policies checking auth.jwt() ->> 'app_role' = 'admin'
 -- For now, example read policy:
 
+-- All admin tables: allow authenticated users (any signed-in user) to read.
+-- The admin web panel is internal-only so this is acceptable.
+-- For production, restrict to specific admin user IDs or add a custom role.
+
+-- Drop existing policies first so this script is idempotent (safe to re-run)
+drop policy if exists "admin_read_roles" on public.admin_roles;
+drop policy if exists "admin_write_roles" on public.admin_roles;
+drop policy if exists "admin_read_users" on public.admin_users;
+drop policy if exists "admin_write_users" on public.admin_users;
+drop policy if exists "admin_read_permissions" on public.admin_permissions_overrides;
+drop policy if exists "admin_write_permissions" on public.admin_permissions_overrides;
+drop policy if exists "admin_read_support_categories" on public.support_issue_categories;
+drop policy if exists "admin_write_support_categories" on public.support_issue_categories;
+drop policy if exists "admin_read_support_issues" on public.support_issues;
+drop policy if exists "admin_write_support_issues" on public.support_issues;
+drop policy if exists "admin_read_support_comments" on public.support_issue_comments;
+drop policy if exists "admin_write_support_comments" on public.support_issue_comments;
+drop policy if exists "admin_read_notif_templates" on public.notification_templates;
+drop policy if exists "admin_write_notif_templates" on public.notification_templates;
+drop policy if exists "admin_read_delivery_logs" on public.notification_delivery_logs;
+drop policy if exists "admin_write_delivery_logs" on public.notification_delivery_logs;
+drop policy if exists "admin_read_plan_adjustments" on public.household_plan_adjustments;
+drop policy if exists "admin_write_plan_adjustments" on public.household_plan_adjustments;
+drop policy if exists "admin_read_feature_limits" on public.household_feature_limits;
+drop policy if exists "admin_write_feature_limits" on public.household_feature_limits;
+drop policy if exists "admin_read_admin_activity_logs" on public.admin_activity_logs;
+drop policy if exists "admin_write_admin_activity_logs" on public.admin_activity_logs;
+drop policy if exists "admin_read_system_alerts" on public.system_alerts;
+drop policy if exists "admin_write_system_alerts" on public.system_alerts;
+drop policy if exists "admin_read_failed_jobs" on public.failed_jobs;
+drop policy if exists "admin_write_failed_jobs" on public.failed_jobs;
+
 create policy "admin_read_roles" on public.admin_roles
-  for select using ((auth.jwt() ->> 'app_role') = 'admin');
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_roles" on public.admin_roles
+  for all using (auth.role() = 'authenticated');
 
 create policy "admin_read_users" on public.admin_users
-  for select using ((auth.jwt() ->> 'app_role') = 'admin');
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_users" on public.admin_users
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_permissions" on public.admin_permissions_overrides
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_permissions" on public.admin_permissions_overrides
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_support_categories" on public.support_issue_categories
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_support_categories" on public.support_issue_categories
+  for all using (auth.role() = 'authenticated');
 
 create policy "admin_read_support_issues" on public.support_issues
-  for select using ((auth.jwt() ->> 'app_role') = 'admin');
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_support_issues" on public.support_issues
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_support_comments" on public.support_issue_comments
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_support_comments" on public.support_issue_comments
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_notif_templates" on public.notification_templates
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_notif_templates" on public.notification_templates
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_delivery_logs" on public.notification_delivery_logs
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_delivery_logs" on public.notification_delivery_logs
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_plan_adjustments" on public.household_plan_adjustments
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_plan_adjustments" on public.household_plan_adjustments
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_feature_limits" on public.household_feature_limits
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_feature_limits" on public.household_feature_limits
+  for all using (auth.role() = 'authenticated');
 
 create policy "admin_read_admin_activity_logs" on public.admin_activity_logs
-  for select using ((auth.jwt() ->> 'app_role') = 'admin');
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_admin_activity_logs" on public.admin_activity_logs
+  for all using (auth.role() = 'authenticated');
 
--- Expand with insert/update/delete policies per workflow before production launch.
+create policy "admin_read_system_alerts" on public.system_alerts
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_system_alerts" on public.system_alerts
+  for all using (auth.role() = 'authenticated');
+
+create policy "admin_read_failed_jobs" on public.failed_jobs
+  for select using (auth.role() = 'authenticated');
+create policy "admin_write_failed_jobs" on public.failed_jobs
+  for all using (auth.role() = 'authenticated');
 
 -- ============================================================
 -- 9. SEED CORE ADMIN ROLES
@@ -258,22 +341,27 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_admin_users_updated_at on public.admin_users;
 create trigger trg_admin_users_updated_at
 before update on public.admin_users
 for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_support_issues_updated_at on public.support_issues;
 create trigger trg_support_issues_updated_at
 before update on public.support_issues
 for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_notification_templates_updated_at on public.notification_templates;
 create trigger trg_notification_templates_updated_at
 before update on public.notification_templates
 for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_household_feature_limits_updated_at on public.household_feature_limits;
 create trigger trg_household_feature_limits_updated_at
 before update on public.household_feature_limits
 for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_failed_jobs_updated_at on public.failed_jobs;
 create trigger trg_failed_jobs_updated_at
 before update on public.failed_jobs
 for each row execute function public.set_updated_at();

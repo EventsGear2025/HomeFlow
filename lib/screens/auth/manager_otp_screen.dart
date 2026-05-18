@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,13 +13,11 @@ import '../main_shell.dart';
 class ManagerOtpScreen extends StatefulWidget {
   final String email;
   final String fullName;
-  final String inviteCode;
 
   const ManagerOtpScreen({
     super.key,
     required this.email,
     required this.fullName,
-    required this.inviteCode,
   });
 
   @override
@@ -25,13 +25,25 @@ class ManagerOtpScreen extends StatefulWidget {
 }
 
 class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
+  static const int _otpLength = 8;
+
   final _otpCtrl = TextEditingController();
   bool _verifying = false;
   bool _resending = false;
   int _resendCooldown = 0;
+  bool _codeExpired = false;
+  Timer? _cooldownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _resendCooldown = 30;
+    _startCooldown();
+  }
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     _otpCtrl.dispose();
     super.dispose();
   }
@@ -39,12 +51,13 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
   Future<void> _verify() async {
     if (_verifying) return;
     final otp = _otpCtrl.text.trim();
-    if (otp.length < 6) {
-      _showError('Enter the verification code from your email.');
+    if (otp.length < _otpLength) {
+      _showError('Enter the $_otpLength-digit verification code from your email.');
       return;
     }
     setState(() => _verifying = true);
     final normalizedEmail = widget.email.trim().toLowerCase();
+    bool otpVerified = false;
     try {
       debugPrint('[ManagerOTP] Verifying token "$otp" for $normalizedEmail');
 
@@ -53,6 +66,7 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
         token: otp,
         type: OtpType.signup,
       );
+      otpVerified = true;
       debugPrint('[ManagerOTP] Verified successfully');
 
       if (!mounted) return;
@@ -62,7 +76,6 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
       await auth.completeManagerSetup(
         fullName: widget.fullName,
         email: normalizedEmail,
-        inviteCode: widget.inviteCode,
       );
       debugPrint('[ManagerOTP] completeManagerSetup done');
 
@@ -75,11 +88,24 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
     } on AuthException catch (e) {
       debugPrint('[ManagerOTP] AuthException: ${e.statusCode} ${e.message}');
       if (!mounted) return;
-      _showError(e.message);
+      final msg = e.message.toLowerCase();
+      if (!otpVerified && (msg.contains('expired') || msg.contains('invalid'))) {
+        _otpCtrl.clear();
+        setState(() => _codeExpired = true);
+        _showError('That code has expired — tap “Send a new code” below.');
+      } else {
+        _showError(e.message);
+      }
     } catch (e) {
       debugPrint('[ManagerOTP] Error: $e');
       if (!mounted) return;
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      final msg = e.toString();
+      if (msg.contains('SocketException') || msg.contains('ClientException') ||
+          msg.contains('TimeoutException') || msg.contains('Network')) {
+        _showError('No internet connection. Please check your network and try again.');
+      } else {
+        _showError(msg.replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -98,7 +124,10 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('A new code has been sent to your email.')),
       );
-      setState(() => _resendCooldown = 60);
+      setState(() {
+        _codeExpired = false;
+        _resendCooldown = 30;
+      });
       _startCooldown();
     } catch (e) {
       if (!mounted) return;
@@ -108,12 +137,22 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
     }
   }
 
-  void _startCooldown() async {
-    while (_resendCooldown > 0) {
-      await Future.delayed(const Duration(seconds: 1));
-      if (!mounted) return;
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_resendCooldown <= 1) {
+        timer.cancel();
+        setState(() => _resendCooldown = 0);
+        return;
+      }
+
       setState(() => _resendCooldown--);
-    }
+    });
   }
 
   void _showError(String msg) {
@@ -135,8 +174,9 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
         title: const Text('Verify Email',
             style: TextStyle(color: AppColors.textPrimary)),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(28),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+            28, 28, 28, MediaQuery.of(context).viewInsets.bottom + 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -160,17 +200,20 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
                     ),
                   ),
                   const TextSpan(
-                      text: '. Enter it below to confirm your account and join the household.'),
+                      text: '. Enter it below to confirm your account and continue into the app.'),
                 ],
               ),
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 24),
             TextFormField(
               controller: _otpCtrl,
               keyboardType: TextInputType.number,
-              maxLength: 8,
+              maxLength: _otpLength,
               textAlign: TextAlign.center,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (v) {
+                if (v.trim().length == _otpLength) _verify();
+              },
               style: const TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w700,
@@ -179,7 +222,7 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
               ),
               decoration: InputDecoration(
                 counterText: '',
-                hintText: '• • • • • •',
+                hintText: '• • • • • • • •',
                 hintStyle: TextStyle(
                   fontSize: 24,
                   letterSpacing: 10,
@@ -188,7 +231,44 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 20),
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 8),
+            Text(
+              'Code valid for 60 minutes',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            if (_codeExpired) ...[   
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        color: Colors.orange.shade700, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Your code has expired. Request a new one below.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade800,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -200,23 +280,43 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text('Verify & Join Household'),
+                    : const Text('Verify & Continue'),
               ),
             ),
-            const SizedBox(height: 20),
-            Center(
-              child: TextButton(
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryTeal,
+                  side: BorderSide(
+                    color: (_resendCooldown > 0 || _resending)
+                        ? AppColors.textHint
+                        : AppColors.primaryTeal,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
                 onPressed: (_resendCooldown > 0 || _resending) ? null : _resend,
-                child: _resending
-                    ? const Text('Sending…')
+                icon: _resending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.primaryTeal),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 18),
+                label: _resending
+                    ? const Text('Sending new code…')
                     : _resendCooldown > 0
-                        ? Text('Resend code in ${_resendCooldown}s',
-                            style:
-                                const TextStyle(color: AppColors.textSecondary))
-                        : const Text('Didn\'t receive it? Resend code'),
+                        ? Text('Resend in ${_resendCooldown}s',
+                            style: const TextStyle(
+                                color: AppColors.textSecondary))
+                        : const Text('Send a new code'),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -230,7 +330,7 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Check your spam folder if you don\'t see the email within a minute.',
+                      'Check your spam folder if you don\'t see the email within a minute. After verification, open the left menu in the app to enter the homeowner\'s invite code.',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.primaryTeal.withAlpha(220),

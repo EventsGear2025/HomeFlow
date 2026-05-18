@@ -198,6 +198,7 @@ class PremiumAnalyticsEntryCard extends StatelessWidget {
   final bool isUnlocked;
   final String unlockedLabel;
   final String lockedLabel;
+  final Widget? supportingPanel;
   final VoidCallback onPressed;
 
   const PremiumAnalyticsEntryCard({
@@ -208,6 +209,7 @@ class PremiumAnalyticsEntryCard extends StatelessWidget {
     required this.highlights,
     required this.isUnlocked,
     required this.onPressed,
+    this.supportingPanel,
     this.unlockedLabel = 'Open Analytics',
     this.lockedLabel = 'Unlock with Home Pro',
   });
@@ -327,6 +329,10 @@ class PremiumAnalyticsEntryCard extends StatelessWidget {
                 )
                 .toList(),
           ),
+          if (supportingPanel != null) ...[
+            const SizedBox(height: 16),
+            supportingPanel!,
+          ],
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,

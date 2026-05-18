@@ -27,6 +27,19 @@ class TaskProvider extends ChangeNotifier {
   int get todayDoneCount => todayTasks.where((t) => t.isDone).length;
   int get todayTotalCount => todayTasks.length;
 
+  /// Tasks for an arbitrary date key (yyyy-MM-dd), sorted by creation time.
+  List<TaskItem> tasksForDate(String dateKey) {
+    return _items.where((t) => t.dateKey == dateKey).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
+  /// All distinct date keys that have at least one task, newest first.
+  List<String> get availableDateKeys {
+    final keys = _items.map((t) => t.dateKey).toSet().toList();
+    keys.sort((a, b) => b.compareTo(a));
+    return keys;
+  }
+
   Future<void> loadData(String householdId) async {
     _householdId = householdId;
     _isLoading = true;
@@ -51,12 +64,14 @@ class TaskProvider extends ChangeNotifier {
     final cutoff = DateTime.now().subtract(const Duration(days: 30));
     _items.removeWhere((t) => t.createdAt.isBefore(cutoff));
 
-    // Seed default tasks if today has none yet
+    // Seed today's tasks if none exist yet
     final key = todayKey();
     final hasToday = _items.any((t) => t.dateKey == key);
     if (!hasToday) {
       const uuid = Uuid();
       final now = DateTime.now();
+
+      // 1. Seed the hardcoded default daily tasks
       for (var i = 0; i < kDefaultDailyTasks.length; i++) {
         _items.add(TaskItem(
           id: uuid.v4(),
@@ -64,9 +79,37 @@ class TaskProvider extends ChangeNotifier {
           title: kDefaultDailyTasks[i],
           addedBy: 'owner',
           dateKey: key,
-          // stagger creation times so sort order is stable
           createdAt: now.add(Duration(milliseconds: i)),
+          isRecurring: true,
         ));
+      }
+
+      // 2. Carry over custom recurring tasks from any recent day
+      final existingDefaultTitles =
+          kDefaultDailyTasks.map((t) => t.toLowerCase()).toSet();
+      final seen = <String>{}; // deduplicate by title
+      // Look back up to 7 days for recurring custom tasks
+      for (var daysBack = 1; daysBack <= 7; daysBack++) {
+        final past = DateTime.now().subtract(Duration(days: daysBack));
+        final pastKey =
+            '${past.year}-${past.month.toString().padLeft(2, '0')}-${past.day.toString().padLeft(2, '0')}';
+        final pastRecurring = _items.where((t) =>
+            t.dateKey == pastKey &&
+            t.isRecurring &&
+            !existingDefaultTitles.contains(t.title.toLowerCase()) &&
+            !seen.contains(t.title.toLowerCase()));
+        for (final src in pastRecurring) {
+          seen.add(src.title.toLowerCase());
+          _items.add(TaskItem(
+            id: uuid.v4(),
+            householdId: householdId,
+            title: src.title,
+            addedBy: src.addedBy,
+            dateKey: key,
+            createdAt: now.add(Duration(milliseconds: kDefaultDailyTasks.length + seen.length)),
+            isRecurring: true,
+          ));
+        }
       }
     }
 
@@ -76,7 +119,9 @@ class TaskProvider extends ChangeNotifier {
   }
 
   /// Add a task for today. [addedBy] should be 'owner' or 'manager'.
-  Future<void> addTask(String title, String addedBy) async {
+  /// Set [isRecurring] to true to have the task reappear fresh every new day.
+  Future<void> addTask(String title, String addedBy,
+      {bool isRecurring = false}) async {
     if (_householdId == null || title.trim().isEmpty) return;
     const uuid = Uuid();
     _items.add(TaskItem(
@@ -86,7 +131,18 @@ class TaskProvider extends ChangeNotifier {
       addedBy: addedBy,
       dateKey: todayKey(),
       createdAt: DateTime.now(),
+      isRecurring: isRecurring,
     ));
+    notifyListeners();
+    await _persist();
+  }
+
+  /// Toggle the `isRecurring` flag on an existing task.
+  Future<void> toggleRecurring(String id) async {
+    final idx = _items.indexWhere((t) => t.id == id);
+    if (idx == -1) return;
+    _items[idx] =
+        _items[idx].copyWith(isRecurring: !_items[idx].isRecurring);
     notifyListeners();
     await _persist();
   }

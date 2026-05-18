@@ -26,6 +26,13 @@ class ShoppingRequest {
   final String? approvedByUserId;
   final DateTime requestedAt;
   final DateTime updatedAt;
+  /// Exact catalog product matched via suggestion chip at add time.
+  final String? catalogProductName;
+  final String? catalogBrand;
+  final String? catalogSizeLabel;
+
+  /// Price paid when marking the item as purchased (optional).
+  final double? pricePaid;
 
   ShoppingRequest({
     required this.id,
@@ -46,6 +53,10 @@ class ShoppingRequest {
     this.approvedByUserId,
     required this.requestedAt,
     required this.updatedAt,
+    this.catalogProductName,
+    this.catalogBrand,
+    this.catalogSizeLabel,
+    this.pricePaid,
   });
 
   /// True if this was a manager request that needed (or still needs) approval.
@@ -79,6 +90,10 @@ class ShoppingRequest {
         'approvedByUserId': approvedByUserId,
         'requestedAt': requestedAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
+        if (catalogProductName != null) 'catalogProductName': catalogProductName,
+        if (catalogBrand != null) 'catalogBrand': catalogBrand,
+        if (catalogSizeLabel != null) 'catalogSizeLabel': catalogSizeLabel,
+        if (pricePaid != null) 'pricePaid': pricePaid,
       };
 
   factory ShoppingRequest.fromJson(Map<String, dynamic> json) =>
@@ -107,23 +122,31 @@ class ShoppingRequest {
         approvedByUserId: json['approvedByUserId'],
         requestedAt: DateTime.parse(json['requestedAt']),
         updatedAt: DateTime.parse(json['updatedAt']),
+        catalogProductName: json['catalogProductName'],
+        catalogBrand: json['catalogBrand'],
+        catalogSizeLabel: json['catalogSizeLabel'],
+        pricePaid: (json['pricePaid'] as num?)?.toDouble(),
       );
 
   ShoppingRequest copyWith({
+    String? itemName,
+    String? quantity,
+    String? notes,
     ShoppingStatus? status,
     String? approvedByUserId,
     bool? autoApproved,
     String? autoApproveReason,
+    double? pricePaid,
   }) =>
       ShoppingRequest(
         id: id,
         householdId: householdId,
         supplyItemId: supplyItemId,
-        itemName: itemName,
-        quantity: quantity,
+        itemName: itemName ?? this.itemName,
+        quantity: quantity ?? this.quantity,
         category: category,
         urgency: urgency,
-        notes: notes,
+        notes: notes ?? this.notes,
         status: status ?? this.status,
         purchaseType: purchaseType,
         autoApproved: autoApproved ?? this.autoApproved,
@@ -134,5 +157,9 @@ class ShoppingRequest {
         approvedByUserId: approvedByUserId ?? this.approvedByUserId,
         requestedAt: requestedAt,
         updatedAt: DateTime.now(),
+        catalogProductName: catalogProductName,
+        catalogBrand: catalogBrand,
+        catalogSizeLabel: catalogSizeLabel,
+        pricePaid: pricePaid ?? this.pricePaid,
       );
 }

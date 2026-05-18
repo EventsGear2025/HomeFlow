@@ -1,0 +1,61 @@
+Analyzing myapp...                                              
+
+warning • The declaration '_seedStarterSupplies' isn't referenced • lib/providers/supply_provider.dart:135:16 • unused_element
+   info • The import of 'package:flutter/foundation.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/screens/auth/manager_otp_screen.dart:1:8 • unnecessary_import
+   info • The import of 'package:flutter/foundation.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/screens/auth/otp_screen.dart:1:8 • unnecessary_import
+warning • The declaration '_AlertBanner' isn't referenced • lib/screens/dashboard/dashboard_screen.dart:1169:7 • unused_element
+warning • The declaration '_SupplyRow' isn't referenced • lib/screens/dashboard/dashboard_screen.dart:1725:7 • unused_element
+warning • The declaration '_OwnerPanel' isn't referenced • lib/screens/dashboard/dashboard_screen.dart:2000:7 • unused_element
+warning • A value for optional parameter 'onShoppingTap' isn't ever given • lib/screens/dashboard/dashboard_screen.dart:2012:10 • unused_element_parameter
+warning • The declaration '_DashboardAnalyticsRow' isn't referenced • lib/screens/dashboard/dashboard_screen.dart:2446:7 • unused_element
+   info • Unnecessary use of multiple underscores • lib/screens/dashboard/dashboard_screen.dart:2750:35 • unnecessary_underscores
+warning • A value for optional parameter 'count' isn't ever given • lib/screens/dashboard/home_pro_analytics_screen.dart:318:50 • unused_element_parameter
+warning • The value of the local variable 'selectedDay' isn't used • lib/screens/kids/kids_screen.dart:58:11 • unused_local_variable
+   info • Unnecessary 'const' keyword • lib/screens/kids/kids_screen.dart:992:24 • unnecessary_const
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/kids/kids_screen.dart:1281:21 • deprecated_member_use
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/kids/kids_screen.dart:1517:21 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/screens/kids/kids_screen.dart:1612:43 • use_build_context_synchronously
+   info • Statements in an if should be enclosed in a block • lib/screens/main_shell.dart:932:17 • curly_braces_in_flow_control_structures
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/meals/meals_screen.dart:1792:29 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/shopping/shopping_screen.dart:2143:15 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/shopping/shopping_screen.dart:2453:15 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/screens/shopping/shopping_screen.dart:2538:31 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/screens/shopping/shopping_screen.dart:2599:31 • unnecessary_underscores
+warning • The value of the local variable 'auth' isn't used • lib/screens/staff/staff_screen.dart:266:11 • unused_local_variable
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/staff/staff_screen.dart:1328:21 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/staff/staff_screen.dart:1485:15 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/staff/staff_screen.dart:1504:15 • deprecated_member_use
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/staff/staff_screen.dart:1549:15 • deprecated_member_use
+warning • The receiver can't be 'null' because of short-circuiting, so the null-aware operator '?.' can't be used • lib/screens/subscription/home_pro_upgrade_screen.dart:91:43 • invalid_null_aware_operator
+warning • The value of the local variable 'totalUnitsLast30' isn't used • lib/screens/supplies/supplies_screen.dart:709:12 • unused_local_variable
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/supplies/supplies_screen.dart:749:48 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/screens/supplies/supplies_screen.dart:2628:19 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/supplies/supplies_screen.dart:2629:26 • use_build_context_synchronously
+warning • The operand can't be 'null', so the condition is always 'true' • lib/screens/supplies/supplies_screen.dart:7919:35 • unnecessary_null_comparison
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/screens/supplies/supplies_screen.dart:7924:17 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/screens/supplies/supplies_screen.dart:7932:17 • use_null_aware_elements
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/supplies/supplies_screen.dart:8274:13 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/supplies/supplies_screen.dart:8283:13 • deprecated_member_use
+   info • Statements in an if should be enclosed in a block • lib/screens/supplies/supplies_screen.dart:8626:52 • curly_braces_in_flow_control_structures
+   info • Don't use 'BuildContext's across async gaps • lib/screens/supplies/supplies_screen.dart:9186:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/supplies/supplies_screen.dart:9685:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/supplies/supplies_screen.dart:10302:27 • use_build_context_synchronously
+   info • Dangling library doc comment • lib/services/mpesa_config.dart:1:1 • dangling_library_doc_comments
+warning • Unused import: 'package:flutter/foundation.dart' • lib/services/retailer_catalog_service.dart:1:8 • unused_import
+warning • The declaration '_ScoredEntry' isn't referenced • lib/services/retailer_catalog_service.dart:476:7 • unused_element
+   info • Statements in a for should be enclosed in a block • lib/services/retailer_catalog_service.dart:495:39 • curly_braces_in_flow_control_structures
+   info • Statements in a for should be enclosed in a block • lib/services/retailer_catalog_service.dart:496:39 • curly_braces_in_flow_control_structures
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/services/sync_service.dart:144:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/services/sync_service.dart:145:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/services/sync_service.dart:207:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/services/sync_service.dart:209:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/services/sync_service.dart:210:9 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/services/sync_service.dart:211:9 • use_null_aware_elements
+warning • The value of the local variable 'dairyCount' isn't used • lib/utils/smart_tips_engine.dart:92:25 • unused_local_variable
+warning • The value of the local variable 'hydrationCount' isn't used • lib/utils/smart_tips_engine.dart:92:41 • unused_local_variable
+warning • The value of the local variable 'fruitPct' isn't used • lib/utils/smart_tips_engine.dart:108:11 • unused_local_variable
+   info • String literals shouldn't be concatenated by the '+' operator • lib/utils/smart_tips_engine.dart:377:50 • prefer_adjacent_string_concatenation
+warning • The operand can't be 'null', so the condition is always 'true' • lib/utils/smart_tips_engine.dart:489:24 • unnecessary_null_comparison
+   info • Use the null-aware marker '?' rather than a null check via an 'if' • lib/widgets/common_widgets.dart:24:9 • use_null_aware_elements
+
+57 issues found. (ran in 8.5s)

@@ -16,7 +16,9 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabCtrl;
   final _formKey = GlobalKey<FormState>();
   final _identifierCtrl = TextEditingController(); // email or phone
   final _passwordCtrl = TextEditingController();
@@ -32,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedIn && mounted) {
         _handleOAuthSignIn();
@@ -41,15 +44,118 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _tabCtrl.dispose();
     _identifierCtrl.dispose();
     _passwordCtrl.dispose();
     _authSub?.cancel();
     super.dispose();
   }
 
+  Future<void> _forgotPassword() async {
+    final emailCtrl = TextEditingController(text: _identifierCtrl.text.trim());
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        bool sending = false;
+        bool sent = false;
+        return StatefulBuilder(
+          builder: (ctx, setLS) => AlertDialog(
+            title: const Text('Reset password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!sent) ...[
+                  const Text(
+                    'Enter your email address and we\'ll send you a link to reset your password.',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    textCapitalization: TextCapitalization.none,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Email address',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline,
+                          color: AppColors.statusEnoughText, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Reset link sent to ${emailCtrl.text.trim()}. Check your inbox (and spam folder).',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+            actions: sent
+                ? [
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Done'),
+                    ),
+                  ]
+                : [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: sending
+                          ? null
+                          : () async {
+                              setLS(() => sending = true);
+                              try {
+                                await context
+                                    .read<AuthProvider>()
+                                    .sendPasswordReset(emailCtrl.text);
+                                setLS(() {
+                                  sending = false;
+                                  sent = true;
+                                });
+                              } catch (e) {
+                                setLS(() => sending = false);
+                                if (!ctx.mounted) return;
+                                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                                  content: Text(e
+                                      .toString()
+                                      .replaceFirst('Exception: ', '')),
+                                  backgroundColor: Colors.red.shade700,
+                                ));
+                              }
+                            },
+                      child: sending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Text('Send reset link'),
+                    ),
+                  ],
+          ),
+        );
+      },
+    );
+    emailCtrl.dispose();
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
+    final isManagerTab = _tabCtrl.index == 1;
     try {
       await auth.login(
         email: _identifierCtrl.text.trim(),
@@ -63,17 +169,50 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (!mounted) return;
-    if (auth.isLoggedIn) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
-        (_) => false,
-      );
-    } else {
+    if (!auth.isLoggedIn) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Incorrect email or password.')),
       );
+      return;
     }
+
+    // If the user chose the Manager tab, try to load their manager profile.
+    if (isManagerTab) {
+      final switched = await auth.switchToManagerProfile();
+      if (!mounted) return;
+      if (!switched && !auth.isHouseManager) {
+        // No manager account found — inform the user and stay on login.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No house manager account found for this email. '
+              'If you\'re a homeowner, please use the Homeowner tab.',
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        // Also sign out so state is clean.
+        await auth.logout();
+        return;
+      }
+      if (!switched && auth.isHouseManager) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Signed in successfully. Join a household from the left menu to continue.',
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const MainShell()),
+      (_) => false,
+    );
   }
 
   Future<void> _googleSignIn() async {
@@ -107,6 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showHouseholdSetupSheet(AuthProvider auth) {
     final nameCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -127,7 +267,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary)),
             const SizedBox(height: 6),
-            const Text('Give your household a name to get started.',
+            const Text('Give your household a name and delivery address to get started.',
                 style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 20),
             TextField(
@@ -139,18 +279,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 prefixIcon: Icon(Icons.home_outlined),
               ),
             ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: addressCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Delivery address',
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
                   final name = nameCtrl.text.trim();
-                  if (name.isEmpty) return;
+                  final address = addressCtrl.text.trim();
+                  if (name.isEmpty || address.isEmpty) return;
                   Navigator.pop(ctx);
                   await auth.completeOwnerSetup(
                     fullName: auth.currentUser?.fullName ?? 'Owner',
                     email: auth.currentUser?.email ?? '',
                     householdName: name,
+                    deliveryAddress: address,
                   );
                   if (!mounted) return;
                   Navigator.pushAndRemoveUntil(
@@ -238,12 +389,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.textSecondary,
                         )),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+
+                // Role selector tabs (mirrors Sign Up screen)
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TabBar(
+                    controller: _tabCtrl,
+                    indicator: BoxDecoration(
+                      color: AppColors.primaryTeal,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: AppColors.textSecondary,
+                    labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
+                    tabs: const [
+                      Tab(text: 'I\'m a Homeowner'),
+                      Tab(text: 'I\'m a Manager'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
 
                 // Email / Phone field
                 TextFormField(
                   controller: _identifierCtrl,
-                  keyboardType: TextInputType.text,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  textCapitalization: TextCapitalization.none,
                   decoration: const InputDecoration(
                     labelText: 'Email or phone number',
                     prefixIcon: Icon(Icons.person_outline),
@@ -268,7 +447,25 @@ class _LoginScreenState extends State<LoginScreen> {
                   validator: (v) =>
                       v == null || v.isEmpty ? 'Enter your password' : null,
                 ),
-                const SizedBox(height: 28),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _forgotPassword,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 4),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Forgot password?',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.primaryTeal,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 // Sign In button
                 SizedBox(

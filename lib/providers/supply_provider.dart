@@ -21,13 +21,30 @@ class SupplyProvider extends ChangeNotifier {
   List<ShoppingRequest> get shoppingRequests => _shoppingRequests;
   bool get isLoading => _isLoading;
 
-  List<SupplyItem> get lowStockItems => _supplies
-      .where((s) => s.needsAttention)
+  List<SupplyItem> lowStockItems({required bool isOwner}) => _supplies
+      .where((s) => s.needsAttention && (isOwner || !s.isOwnerOnly))
       .toList();
 
   /// Supplies currently marked as finished — the auto shopping list.
-  List<SupplyItem> get finishedSupplies =>
-      _supplies.where((s) => s.status == SupplyStatus.finished).toList();
+  /// Owner-only items are excluded for house managers.
+  /// Items that already have an active (non-purchased, non-deferred) shopping
+  /// request are excluded to prevent the same item appearing twice in Buy Now.
+  List<SupplyItem> finishedSupplies({required bool isOwner}) {
+    final activeRequestedSupplyIds = _shoppingRequests
+        .where((r) =>
+            r.supplyItemId != null &&
+            r.status != ShoppingStatus.purchased &&
+            r.status != ShoppingStatus.deferred)
+        .map((r) => r.supplyItemId!)
+        .toSet();
+
+    return _supplies
+        .where((s) =>
+            s.status == SupplyStatus.finished &&
+            (isOwner || !s.isOwnerOnly) &&
+            !activeRequestedSupplyIds.contains(s.id))
+        .toList();
+  }
 
   List<SupplyItem> get gasItems =>
       _supplies.where((s) => s.isGas).toList();
@@ -235,6 +252,25 @@ class SupplyProvider extends ChangeNotifier {
     _supplies[index] =
         _supplies[index].copyWith(isOwnerOnly: !_supplies[index].isOwnerOnly);
     notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await _saveSupplies(householdId, prefs);
+  }
+
+  /// Permanently removes a shopping request (e.g. added by mistake).
+  Future<void> deleteShoppingRequest(
+      String requestId, String householdId) async {
+    _shoppingRequests.removeWhere((r) => r.id == requestId);
+    notifyListeners();
+    SyncService.deleteOne('app_shopping_requests', requestId);
+    final prefs = await SharedPreferences.getInstance();
+    await _saveRequests(householdId, prefs);
+  }
+
+  /// Permanently removes a supply item from the tracked list.
+  Future<void> removeSupplyItem(String supplyId, String householdId) async {
+    _supplies.removeWhere((s) => s.id == supplyId);
+    notifyListeners();
+    SyncService.deleteOne('app_supplies', supplyId);
     final prefs = await SharedPreferences.getInstance();
     await _saveSupplies(householdId, prefs);
   }

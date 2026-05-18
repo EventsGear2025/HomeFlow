@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:percent_indicator/linear_percent_indicator.dart';
 
+import '../../services/supabase_service.dart';
 import '../../utils/app_colors.dart';
 import '../models/admin_models.dart';
 
@@ -144,14 +146,35 @@ class _SidebarContents extends StatelessWidget {
                 color: const Color(0xFF001D39),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Admin role', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  SizedBox(height: 6),
-                  Text('Super Admin', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                  SizedBox(height: 8),
-                  Text('Can manage households, billing, support, presets, and audit controls.', style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+                  const Text('Signed in as', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Text(
+                    SupabaseService.client.auth.currentUser?.email ?? 'Admin',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        alignment: Alignment.centerLeft,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: const Icon(Icons.logout_rounded, size: 16),
+                      label: const Text('Sign out', style: TextStyle(fontSize: 13)),
+                      onPressed: () async {
+                        await SupabaseService.client.auth.signOut();
+                        if (context.mounted) context.go('/admin/login');
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),

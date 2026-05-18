@@ -36,6 +36,12 @@ class SyncService {
   static Future<String?> createHousehold({
     required String name,
     required String inviteCode,
+    String? homeownerInviteCode,
+    String? deliveryAddress,
+    String? deliveryContactName,
+    String? deliveryPhone,
+    String? deliverySmsNotes,
+    String? supermarketDeliveryNotes,
   }) async {
     if (!isAvailable) return null;
     try {
@@ -44,9 +50,15 @@ class SyncService {
           .insert({
             'household_name': name,
             'invite_code': inviteCode,
+            'homeowner_invite_code': homeownerInviteCode,
             'owner_user_id': _db.auth.currentUser!.id,
             'plan_code': 'free',
             'plan_status': 'active',
+            'delivery_address': deliveryAddress,
+            'delivery_contact_name': deliveryContactName,
+            'delivery_phone': deliveryPhone,
+            'delivery_sms_notes': deliverySmsNotes,
+            'supermarket_delivery_notes': supermarketDeliveryNotes,
           })
           .select('id')
           .single();
@@ -81,15 +93,21 @@ class SyncService {
   static Future<String?> joinHouseholdByInviteCode(
     String inviteCode, {
     String? userId,
+    String role = 'house_manager',
   }) async {
     // When userId is supplied we can call the RPC even without an active session
     // (the SECURITY DEFINER function receives the id directly). Only gate on
     // isAvailable when we have no explicit userId to pass.
     if (userId == null && !isAvailable) return null;
     try {
-      final params = <String, dynamic>{'invite': inviteCode};
+      final params = <String, dynamic>{
+        'invite': inviteCode,
+        'p_role': role,
+      };
       if (userId != null) params['p_user_id'] = userId;
-      debugPrint('[SyncService] joinHouseholdByInviteCode invite=$inviteCode userId=$userId');
+      debugPrint(
+        '[SyncService] joinHouseholdByInviteCode invite=$inviteCode userId=$userId role=$role',
+      );
       final result = await _db.rpc(
         'join_household_by_invite',
         params: params,
@@ -108,13 +126,39 @@ class SyncService {
     }
   }
 
+  /// Fetch a specific membership row for [userId]. When [householdId] is
+  /// provided, limits the lookup to that household.
+  static Future<Map<String, dynamic>?> fetchMembership(
+    String userId, {
+    String? householdId,
+  }) async {
+    if (!isAvailable) return null;
+    try {
+      dynamic query = _db
+          .from('app_household_members')
+          .select('*')
+          .eq('user_id', userId);
+      if (householdId != null && householdId.isNotEmpty) {
+        query = query.eq('household_id', householdId);
+      }
+      final rows = await query.limit(1);
+      final list = List<Map<String, dynamic>>.from(rows);
+      return list.isNotEmpty ? list.first : null;
+    } catch (e) {
+      debugPrint('[SyncService] fetchMembership error: $e');
+      return null;
+    }
+  }
+
   /// Remove a specific user from a household's member list in Supabase.
   /// Called by the owner when removing a manager, or by the manager on leave.
   static Future<void> removeHouseholdMember({
     required String householdId,
     required String userId,
   }) async {
-    if (!isAvailable) return;
+    if (!isAvailable) {
+      throw Exception('Supabase sync is not available right now.');
+    }
     try {
       await _db
           .from('app_household_members')
@@ -123,6 +167,7 @@ class SyncService {
           .eq('user_id', userId);
     } catch (e) {
       debugPrint('[SyncService] removeHouseholdMember error: $e');
+      throw Exception('Could not update household access. Please try again.');
     }
   }
 
@@ -156,14 +201,99 @@ class SyncService {
   ) async {
     if (!isAvailable) return null;
     try {
+      // Use select('*') so the query succeeds even if optional columns
+      // (full_name, display_email) have not been added to the table yet.
       final rows = await _db
           .from('app_household_members')
-          .select('user_id, role, full_name, display_email, household_id')
+          .select('*')
           .eq('household_id', householdId);
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
       debugPrint('[SyncService] fetchHouseholdMembers error: $e');
       return null;
+    }
+  }
+
+  /// Look up whether [userId] has a house_manager membership in any household.
+  /// Returns the first matching {household_id, full_name} map, or null.
+  static Future<Map<String, dynamic>?> fetchManagerMembership(
+    String userId,
+  ) async {
+    if (!isAvailable) return null;
+    try {
+      final rows = await _db
+          .from('app_household_members')
+          .select('household_id, full_name')
+          .eq('user_id', userId)
+          .eq('role', 'house_manager')
+          .limit(1);
+      final list = List<Map<String, dynamic>>.from(rows);
+      return list.isNotEmpty ? list.first : null;
+    } catch (e) {
+      debugPrint('[SyncService] fetchManagerMembership error: $e');
+      return null;
+    }
+  }
+
+  /// Update editable household fields. Owners and co-owners are expected to
+  /// call this through app-side role checks plus RLS.
+  static Future<void> updateHouseholdDetails({
+    required String householdId,
+    String? householdName,
+    String? managerInviteCode,
+    String? homeownerInviteCode,
+    String? deliveryAddress,
+    String? deliveryContactName,
+    String? deliveryPhone,
+    String? deliverySmsNotes,
+    String? supermarketDeliveryNotes,
+  }) async {
+    if (!isAvailable) return;
+    final updates = <String, dynamic>{
+      if (householdName != null) 'household_name': householdName,
+      if (managerInviteCode != null) 'invite_code': managerInviteCode,
+      if (homeownerInviteCode != null)
+        'homeowner_invite_code': homeownerInviteCode,
+      if (deliveryAddress != null) 'delivery_address': deliveryAddress,
+      if (deliveryContactName != null)
+        'delivery_contact_name': deliveryContactName,
+      if (deliveryPhone != null) 'delivery_phone': deliveryPhone,
+      if (deliverySmsNotes != null) 'delivery_sms_notes': deliverySmsNotes,
+      if (supermarketDeliveryNotes != null)
+        'supermarket_delivery_notes': supermarketDeliveryNotes,
+    };
+    if (updates.isEmpty) return;
+    try {
+      await _db.from('app_households').update(updates).eq('id', householdId);
+    } catch (e) {
+      debugPrint('[SyncService] updateHouseholdDetails error: $e');
+    }
+  }
+
+  /// Update manager profile fields (ID number, start date, leave, notes).
+  /// Only the household owner should call this.
+  static Future<void> updateManagerProfile({
+    required String householdId,
+    required String userId,
+    String? idNumber,
+    DateTime? startDate,
+    int? leaveDaysTotal,
+    int? leaveDaysTaken,
+    String? managerNotes,
+  }) async {
+    if (!isAvailable) return;
+    try {
+      await _db.from('app_household_members').update({
+        if (idNumber != null) 'id_number': idNumber,
+        if (startDate != null) 'start_date': startDate.toIso8601String().substring(0, 10),
+        if (leaveDaysTotal != null) 'leave_days_total': leaveDaysTotal,
+        if (leaveDaysTaken != null) 'leave_days_taken': leaveDaysTaken,
+        if (managerNotes != null) 'manager_notes': managerNotes,
+      })
+          .eq('household_id', householdId)
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('[SyncService] updateManagerProfile error: $e');
     }
   }
 

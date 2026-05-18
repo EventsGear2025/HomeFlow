@@ -378,3 +378,50 @@ class AdminHouseholdDetailData {
     }
   }
 }
+
+class AdOfferRow {
+  const AdOfferRow({
+    required this.id,
+    required this.advertiser,
+    required this.accentHex,
+    required this.productName,
+    required this.oldPriceCents,
+    required this.newPriceCents,
+    required this.currency,
+    required this.placement,
+    required this.category,
+    required this.displayOrder,
+    required this.isActive,
+    this.expiresAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String advertiser;
+  final String accentHex;
+  final String productName;
+  final int oldPriceCents;
+  final int newPriceCents;
+  final String currency;
+  final String placement;
+  final String category;
+  final int displayOrder;
+  final bool isActive;
+  final String? expiresAt;
+  final String createdAt;
+
+  /// KES 1,199
+  String get formattedOldPrice => _formatKes(oldPriceCents);
+  String get formattedNewPrice => _formatKes(newPriceCents);
+
+  int get discountPercent =>
+      oldPriceCents > 0 ? (((oldPriceCents - newPriceCents) / oldPriceCents) * 100).round() : 0;
+
+  static String _formatKes(int cents) {
+    final kes = (cents / 100).round();
+    final formatted = kes
+        .toString()
+        .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m.group(1)},');
+    return 'KES $formatted';
+  }
+}

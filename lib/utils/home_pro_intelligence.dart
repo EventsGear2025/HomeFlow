@@ -767,7 +767,7 @@ class HomeProIntelligenceEngine {
       case UtilityType.payTv:
         return utility.payTvSetupDone;
       case UtilityType.other:
-        return true;
+        return utility.otherSetupDone;
     }
   }
 
@@ -798,6 +798,9 @@ class HomeProIntelligenceEngine {
     }
     if (utility.type == UtilityType.payTv) {
       return utility.payTvDaysUntilDue;
+    }
+    if (utility.type == UtilityType.other) {
+      return utility.otherDaysUntilDue;
     }
     return null;
   }

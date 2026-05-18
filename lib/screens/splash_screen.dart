@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_colors.dart';
 import 'auth/login_screen.dart';
 import 'auth/signup_screen.dart';
 import 'main_shell.dart';
+import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -41,19 +43,31 @@ class _SplashScreenState extends State<SplashScreen>
     final auth = context.read<AuthProvider>();
     await auth.loadFromStorage();
     if (!mounted) return;
+
     if (auth.isLoggedIn && auth.household != null) {
+      // Returning user with a valid session → go straight to the app.
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const MainShell()),
         (_) => false,
       );
-    } else {
+      return;
+    }
+
+    // First-time users → show onboarding before the login/signup buttons.
+    final prefs = await SharedPreferences.getInstance();
+    final seenOnboarding = prefs.getBool('onboarding_seen') ?? false;
+    if (!mounted) return;
+    if (!seenOnboarding) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const SignUpScreen()),
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
         (_) => false,
       );
+      return;
     }
+    // Returning (not logged-in) users stay on this screen to see the
+    // "Get Started" and "I already have an account" buttons.
   }
 
   @override

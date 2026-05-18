@@ -41,6 +41,9 @@ class UtilityProvider extends ChangeNotifier {
   List<UtilityTracker> get payTvItems =>
       _items.where((i) => i.type == UtilityType.payTv).toList();
 
+  List<UtilityTracker> get otherItems =>
+      _items.where((i) => i.type == UtilityType.other).toList();
+
   List<UtilityTracker> get lowAlertItems =>
       _items.where((i) => i.isLowAlert).toList();
 
@@ -94,8 +97,6 @@ class UtilityProvider extends ChangeNotifier {
         label: 'Main Electricity',
         electricitySetupDone: false,
         isPostpaid: false,
-        unitsRemaining: 85,
-        lastToppedUpAt: DateTime.now().subtract(const Duration(days: 5)),
         updatedAt: DateTime.now(),
       ),
       UtilityTracker(
@@ -104,26 +105,7 @@ class UtilityProvider extends ChangeNotifier {
         type: UtilityType.water,
         label: 'Drinking Water',
         isDrinkingWater: true,
-        waterSetupDone: true,
-        containerSizeLitres: 18.5,
-        totalContainers: 2,
-        fullContainers: 1,
-        emptyContainers: 1,
-        reorderThreshold: 1,
-        typicalOrderQuantity: 2,
-        reorderFrequencyDays: 14,
-        pricePerContainer: 450,
-        lastDeliveredAt: DateTime.now().subtract(const Duration(days: 11)),
-        paymentStatus: UtilityPaymentStatus.paid,
-        lastPaidAt: DateTime.now().subtract(const Duration(days: 11)),
-        supplier1: const GasSupplier(
-          name: 'Jibu',
-          phone: '+254700000000',
-          mpesaName: 'Jibu Water',
-          mpesaTill: '530530',
-          isPaybill: false,
-        ),
-        notes: '2 x 18.5L bottles. Good default for a medium household.',
+        waterSetupDone: false,
         updatedAt: DateTime.now(),
       ),
       UtilityTracker(
@@ -399,6 +381,7 @@ class UtilityProvider extends ChangeNotifier {
     required int reorderFrequencyDays,
     required double pricePerContainer,
     GasSupplier? supplier1,
+    GasSupplier? supplier2,
     String? deliveryAddress,
     String? notes,
   }) async {
@@ -417,6 +400,7 @@ class UtilityProvider extends ChangeNotifier {
         reorderFrequencyDays: reorderFrequencyDays,
         pricePerContainer: pricePerContainer,
         supplier1: supplier1,
+        supplier2: supplier2,
         deliveryAddress: deliveryAddress,
         notes: notes,
         waterSetupDone: true,
@@ -485,14 +469,34 @@ class UtilityProvider extends ChangeNotifier {
 
   /// Mark electricity tokens as refilled (prepaid). Clears low alert.
   Future<void> markTokensRefilled(
-      String itemId, String householdId, double unitsAdded) async {
+    String itemId,
+    String householdId,
+    double unitsAdded, {
+    double? amountSpent,
+    double? balanceAfterPurchase,
+  }) async {
     final index = _items.indexWhere((i) => i.id == itemId);
     if (index != -1) {
+      final item = _items[index];
+      final normalizedBalance = balanceAfterPurchase ??
+          ((item.unitsRemaining ?? 0) + unitsAdded);
+      final purchases = [...item.electricityTokenPurchases];
+      if (amountSpent != null && amountSpent > 0) {
+        purchases.add(
+          ElectricityTokenPurchaseEntry(
+            date: DateTime.now(),
+            unitsBought: unitsAdded,
+            amountSpent: amountSpent,
+            balanceAfterPurchase: normalizedBalance,
+          ),
+        );
+      }
       _items[index] = _items[index].copyWith(
-        unitsRemaining: unitsAdded,
+        unitsRemaining: normalizedBalance,
         tokenUnitsAdded: unitsAdded,
         lastToppedUpAt: DateTime.now(),
         electricityLowAlertSent: false,
+        electricityTokenPurchases: purchases,
       );
       notifyListeners();
       final prefs = await SharedPreferences.getInstance();
@@ -601,6 +605,7 @@ class UtilityProvider extends ChangeNotifier {
     String? mpesaTill,
     bool isPaybill = false,
     String? mpesaAccountRef,
+    double? unitsUsed,
   }) async {
     final index = _items.indexWhere((i) => i.id == itemId);
     if (index != -1) {
@@ -613,6 +618,7 @@ class UtilityProvider extends ChangeNotifier {
         waterBillMpesaAccountRef: mpesaAccountRef,
         waterBillPaymentStatus: UtilityPaymentStatus.unpaid,
         waterBillNoteSent: false,
+        waterBillUnitsUsed: unitsUsed,
       );
       notifyListeners();
       final prefs = await SharedPreferences.getInstance();
@@ -882,6 +888,91 @@ class UtilityProvider extends ChangeNotifier {
     }
   }
 
+  // ── Custom / other utility methods ────────────────────────────
+
+  /// Create a new custom utility tracker.
+  Future<void> addCustomUtility({
+    required String householdId,
+    required String label,
+    double? monthlyAmount,
+    int? dueDayOfMonth,
+    String? mpesaTill,
+    bool isPaybill = false,
+    String? mpesaAccountRef,
+  }) async {
+    const uuid = Uuid();
+    final item = UtilityTracker(
+      id: uuid.v4(),
+      householdId: householdId,
+      type: UtilityType.other,
+      label: label,
+      otherSetupDone: true,
+      otherMonthlyAmount: monthlyAmount,
+      otherDueDayOfMonth: dueDayOfMonth,
+      otherMpesaTill: mpesaTill,
+      otherIsPaybill: isPaybill,
+      otherMpesaAccountRef: mpesaAccountRef,
+      otherPaymentStatus: UtilityPaymentStatus.unpaid,
+      updatedAt: DateTime.now(),
+    );
+    _items.add(item);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await _save(householdId, prefs);
+  }
+
+  /// Update a custom utility's settings.
+  Future<void> setupOtherUtility({
+    required String itemId,
+    required String householdId,
+    required String label,
+    double? monthlyAmount,
+    int? dueDayOfMonth,
+    String? mpesaTill,
+    bool isPaybill = false,
+    String? mpesaAccountRef,
+  }) async {
+    final index = _items.indexWhere((i) => i.id == itemId);
+    if (index == -1) return;
+    _items[index] = _items[index].copyWith(
+      label: label,
+      otherSetupDone: true,
+      otherMonthlyAmount: monthlyAmount,
+      otherDueDayOfMonth: dueDayOfMonth,
+      otherMpesaTill: mpesaTill,
+      otherIsPaybill: isPaybill,
+      otherMpesaAccountRef: mpesaAccountRef,
+    );
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await _save(householdId, prefs);
+  }
+
+  /// Mark a custom utility as paid for this cycle.
+  Future<void> markOtherPaid(String itemId, String householdId) async {
+    final index = _items.indexWhere((i) => i.id == itemId);
+    if (index == -1) return;
+    _items[index] = _items[index].copyWith(
+      otherPaymentStatus: UtilityPaymentStatus.paid,
+      otherLastPaidAt: DateTime.now(),
+    );
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await _save(householdId, prefs);
+  }
+
+  /// Reset a custom utility's payment status to unpaid (new cycle).
+  Future<void> resetOtherPayment(String itemId, String householdId) async {
+    final index = _items.indexWhere((i) => i.id == itemId);
+    if (index == -1) return;
+    _items[index] = _items[index].copyWith(
+      otherPaymentStatus: UtilityPaymentStatus.unpaid,
+    );
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await _save(householdId, prefs);
+  }
+
   /// Toggles the owner-only flag on a utility tracker item.
   Future<void> toggleOwnerOnly(String itemId, String householdId) async {
     final index = _items.indexWhere((i) => i.id == itemId);
@@ -907,8 +998,15 @@ class UtilityProvider extends ChangeNotifier {
       quantity: quantity,
       notes: notes,
     );
+    final tracker = _items[index];
+    final nextUnitsRemaining =
+        tracker.type == UtilityType.electricity && !tracker.isPostpaid
+            ? ((tracker.unitsRemaining ?? 0) - quantity).clamp(0, double.infinity)
+                as double
+            : tracker.unitsRemaining;
     _items[index] = _items[index].copyWith(
-      usageLogs: [..._items[index].usageLogs, entry],
+      usageLogs: [...tracker.usageLogs, entry],
+      unitsRemaining: nextUnitsRemaining,
     );
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();

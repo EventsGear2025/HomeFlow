@@ -12,6 +12,9 @@ class TaskItem {
 
   final DateTime createdAt;
 
+  /// When true this task reappears fresh (undone) every new day.
+  final bool isRecurring;
+
   TaskItem({
     required this.id,
     required this.householdId,
@@ -20,9 +23,10 @@ class TaskItem {
     required this.addedBy,
     required this.dateKey,
     required this.createdAt,
+    this.isRecurring = false,
   });
 
-  TaskItem copyWith({String? title, bool? isDone}) => TaskItem(
+  TaskItem copyWith({String? title, bool? isDone, bool? isRecurring}) => TaskItem(
         id: id,
         householdId: householdId,
         title: title ?? this.title,
@@ -30,6 +34,7 @@ class TaskItem {
         addedBy: addedBy,
         dateKey: dateKey,
         createdAt: createdAt,
+        isRecurring: isRecurring ?? this.isRecurring,
       );
 
   Map<String, dynamic> toJson() => {
@@ -40,6 +45,7 @@ class TaskItem {
         'addedBy': addedBy,
         'dateKey': dateKey,
         'createdAt': createdAt.toIso8601String(),
+        'isRecurring': isRecurring,
       };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -50,6 +56,7 @@ class TaskItem {
         addedBy: j['addedBy'] as String? ?? 'owner',
         dateKey: j['dateKey'] as String,
         createdAt: DateTime.parse(j['createdAt'] as String),
+        isRecurring: j['isRecurring'] as bool? ?? false,
       );
 }
 

@@ -30,7 +30,8 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell>
+  with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _isLoading = true;
 
@@ -51,14 +52,29 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
-  Future<void> _loadData() async {
-    final auth = context.read<AuthProvider>();
-    final householdId = auth.household?.id;
-    if (householdId == null) return;
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _loadData(showLoader: false);
+    }
+  }
+
+  Future<void> _loadData({bool showLoader = true}) async {
+    if (showLoader && mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    final auth = context.read<AuthProvider>();
     final supplyProvider = context.read<SupplyProvider>();
     final mealProvider = context.read<MealProvider>();
     final childProvider = context.read<ChildProvider>();
@@ -69,9 +85,30 @@ class _MainShellState extends State<MainShell> {
     final taskProvider = context.read<TaskProvider>();
     final timetableProvider = context.read<MealTimetableProvider>();
 
+    final accessRevoked = await auth.refreshCurrentHouseholdAccess();
+    if (accessRevoked) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
+      return;
+    }
+
+    final householdId = auth.household?.id;
+    if (householdId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
     // Ensure Supabase membership record exists for this user
     final role = auth.isOwner ? 'owner' : 'house_manager';
-    await SyncService.ensureHouseholdMember(householdId, role);
+    await SyncService.ensureHouseholdMember(
+      householdId,
+      role,
+      fullName: auth.currentUser?.fullName,
+      displayEmail: auth.currentUser?.email,
+    );
 
     await Future.wait([
       supplyProvider.loadData(householdId),
@@ -90,12 +127,16 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final isUnlinkedManager = auth.isHouseManager && auth.household == null;
+
     if (_isLoading) {
       return Scaffold(
         backgroundColor: AppColors.surfaceLight,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: 72,
@@ -133,6 +174,7 @@ class _MainShellState extends State<MainShell> {
                 ),
               ),
             ],
+            ),
           ),
         ),
       );
@@ -141,8 +183,12 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       key: DashboardScreen.shellScaffoldKey,
       drawer: const _AccountDrawer(),
-      body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: Container(
+      body: isUnlinkedManager
+          ? const _NoHouseholdBody()
+          : IndexedStack(index: _currentIndex, children: _screens),
+      bottomNavigationBar: isUnlinkedManager
+          ? null
+          : Container(
         decoration: BoxDecoration(
           color: AppColors.white,
           boxShadow: [
@@ -164,7 +210,7 @@ class _MainShellState extends State<MainShell> {
             elevation: 0,
             iconSize: 22,
             selectedLabelStyle: const TextStyle(
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
             unselectedLabelStyle: const TextStyle(fontSize: 10),
@@ -216,6 +262,7 @@ class _AccountDrawer extends StatelessWidget {
     final user = auth.currentUser;
     final household = auth.household;
     final isOwner = auth.isOwner;
+    final isUnlinkedManager = auth.isHouseManager && household == null;
 
     return Drawer(
       child: SafeArea(
@@ -320,51 +367,67 @@ class _AccountDrawer extends StatelessWidget {
                       if (isOwner)
                         _DrawerTile(
                           icon: Icons.group_add_outlined,
-                          title: 'Home manager',
-                          subtitle: 'Add, remove, and manage join code',
+                          title: 'Household access',
+                          subtitle:
+                              'Share homeowner and manager codes, and manage access',
                           onTap: () => _showManagerSheet(context),
                         )
                       else ...[
-                        _DrawerTile(
-                          icon: Icons.home_outlined,
-                          title: auth.household?.householdName ?? 'Your household',
-                          subtitle: () {
-                            final owner = auth.householdMembers
-                                .where((u) => u.role == UserRole.owner)
-                                .firstOrNull;
-                            return owner != null
-                                ? 'Owner: ${owner.fullName}'
-                                : 'Your household details';
-                          }(),
-                        ),
-                        _DrawerTile(
-                          icon: Icons.exit_to_app_outlined,
-                          title: 'Leave household',
-                          subtitle: 'Remove yourself from this household',
-                          onTap: () => _confirmLeaveHousehold(context),
-                        ),
+                        if (isUnlinkedManager)
+                          _DrawerTile(
+                            icon: Icons.link_outlined,
+                            title: 'Join household',
+                            subtitle: 'Enter the homeowner invite code',
+                            onTap: () {
+                              Navigator.pop(context);
+                              showJoinHouseholdSheet(
+                                DashboardScreen.shellScaffoldKey.currentContext ?? context,
+                              );
+                            },
+                          )
+                        else ...[
+                          _DrawerTile(
+                            icon: Icons.home_outlined,
+                            title: auth.household?.householdName ?? 'Your household',
+                            subtitle: () {
+                              final owner = auth.householdMembers
+                                  .where((u) => u.role == UserRole.owner)
+                                  .firstOrNull;
+                              return owner != null
+                                  ? 'Owner: ${owner.fullName}'
+                                  : 'Your household details';
+                            }(),
+                          ),
+                          _DrawerTile(
+                            icon: Icons.exit_to_app_outlined,
+                            title: 'Leave household',
+                            subtitle: 'Remove yourself from this household',
+                            onTap: () => _confirmLeaveHousehold(context),
+                          ),
+                        ],
                       ],
                     ],
                   ),
-                  _DrawerSection(
-                    title: 'Household',
-                    children: [
-                      _DrawerTile(
-                        icon: Icons.badge_outlined,
-                        title: 'Staff',
-                        subtitle: 'View schedules, notes, and staff details',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const StaffScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                  if (household != null)
+                    _DrawerSection(
+                      title: 'Household',
+                      children: [
+                        _DrawerTile(
+                          icon: Icons.badge_outlined,
+                          title: 'Staff',
+                          subtitle: 'View schedules, notes, and staff details',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StaffScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   _DrawerSection(
                     title: 'Support',
                     children: [
@@ -461,6 +524,26 @@ class _AccountDrawer extends StatelessWidget {
   }
 }
 
+Future<void> showJoinHouseholdSheet(BuildContext context) async {
+  final joined = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _JoinHouseholdSheet(),
+  );
+  if (joined != true || !context.mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Household joined successfully.'),
+      backgroundColor: AppColors.primaryTeal,
+    ),
+  );
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(builder: (_) => const MainShell()),
+  );
+}
+
 class _DrawerSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -519,8 +602,80 @@ class _DrawerTile extends StatelessWidget {
   }
 }
 
-class _OwnerProfileSheet extends StatelessWidget {
+class _OwnerProfileSheet extends StatefulWidget {
   const _OwnerProfileSheet();
+
+  @override
+  State<_OwnerProfileSheet> createState() => _OwnerProfileSheetState();
+}
+
+class _OwnerProfileSheetState extends State<_OwnerProfileSheet> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _householdCtrl;
+  late final TextEditingController _deliveryAddressCtrl;
+  late final TextEditingController _deliveryContactNameCtrl;
+  late final TextEditingController _deliveryPhoneCtrl;
+  late final TextEditingController _deliverySmsNotesCtrl;
+  late final TextEditingController _supermarketNotesCtrl;
+  bool _editing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final auth = context.read<AuthProvider>();
+    _nameCtrl = TextEditingController(text: auth.currentUser?.fullName ?? '');
+    _householdCtrl = TextEditingController(text: auth.household?.householdName ?? '');
+    _deliveryAddressCtrl = TextEditingController(
+      text: auth.household?.deliveryAddress ?? '',
+    );
+    _deliveryContactNameCtrl = TextEditingController(
+      text: auth.household?.deliveryContactName ?? '',
+    );
+    _deliveryPhoneCtrl = TextEditingController(
+      text: auth.household?.deliveryPhone ?? '',
+    );
+    _deliverySmsNotesCtrl = TextEditingController(
+      text: auth.household?.deliverySmsNotes ?? '',
+    );
+    _supermarketNotesCtrl = TextEditingController(
+      text: auth.household?.supermarketDeliveryNotes ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _householdCtrl.dispose();
+    _deliveryAddressCtrl.dispose();
+    _deliveryContactNameCtrl.dispose();
+    _deliveryPhoneCtrl.dispose();
+    _deliverySmsNotesCtrl.dispose();
+    _supermarketNotesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final auth = context.read<AuthProvider>();
+    await auth.updateProfile(
+      fullName: _nameCtrl.text,
+      householdName: auth.isOwner ? _householdCtrl.text : null,
+      deliveryAddress: auth.isOwner ? _deliveryAddressCtrl.text : null,
+      deliveryContactName:
+          auth.isOwner ? _deliveryContactNameCtrl.text : null,
+      deliveryPhone: auth.isOwner ? _deliveryPhoneCtrl.text : null,
+      deliverySmsNotes: auth.isOwner ? _deliverySmsNotesCtrl.text : null,
+      supermarketDeliveryNotes:
+          auth.isOwner ? _supermarketNotesCtrl.text : null,
+    );
+    if (!mounted) return;
+    setState(() => _editing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Profile updated ✓'),
+        backgroundColor: AppColors.primaryTeal,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -530,7 +685,7 @@ class _OwnerProfileSheet extends StatelessWidget {
 
     return _SheetShell(
       title: 'Profile info',
-      subtitle: 'Your account details and household identity.',
+      subtitle: 'Your account details, invite codes, and household delivery profile.',
       child: Column(
         children: [
           HomeFlowCard(
@@ -567,17 +722,181 @@ class _OwnerProfileSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _InfoTile(label: 'Full name', value: user?.fullName ?? '—'),
-          _InfoTile(label: 'Email', value: user?.email ?? '—'),
-          _InfoTile(
-            label: 'Role',
-            value: auth.isOwner ? 'Homeowner' : 'House manager',
-          ),
-          _InfoTile(label: 'Household', value: household?.householdName ?? '—'),
-          _InfoTile(
-            label: 'Sign-up code',
-            value: auth.ownerInviteCode.isEmpty ? '—' : auth.ownerInviteCode,
-          ),
+          if (_editing) ...[
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Full name',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+            ),
+            if (auth.isOwner) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _householdCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Household name',
+                  prefixIcon: Icon(Icons.home_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _deliveryAddressCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Delivery address',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _deliveryContactNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Delivery contact name',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _deliveryPhoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Delivery contact phone',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _deliverySmsNotesCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'SMS delivery notes',
+                  prefixIcon: Icon(Icons.sms_outlined),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _supermarketNotesCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Supermarket delivery notes',
+                  prefixIcon: Icon(Icons.shopping_bag_outlined),
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      setState(() => _editing = false);
+                      _nameCtrl.text = user?.fullName ?? '';
+                      _householdCtrl.text = household?.householdName ?? '';
+                      _deliveryAddressCtrl.text = household?.deliveryAddress ?? '';
+                      _deliveryContactNameCtrl.text =
+                          household?.deliveryContactName ?? '';
+                      _deliveryPhoneCtrl.text = household?.deliveryPhone ?? '';
+                      _deliverySmsNotesCtrl.text =
+                          household?.deliverySmsNotes ?? '';
+                      _supermarketNotesCtrl.text =
+                          household?.supermarketDeliveryNotes ?? '';
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: auth.isLoading ? null : _save,
+                    child: auth.isLoading
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            _InfoTile(label: 'Full name', value: user?.fullName ?? '—'),
+            _InfoTile(label: 'Email', value: user?.email ?? '—'),
+            _InfoTile(
+              label: 'Role',
+              value: auth.isOwner ? 'Homeowner' : 'House manager',
+            ),
+            _InfoTile(
+                label: 'Household', value: household?.householdName ?? '—'),
+            if (auth.isOwner)
+              _DetailTile(
+                label: 'Manager invite code',
+                value: auth.managerInviteCode.isEmpty
+                    ? '—'
+                    : auth.managerInviteCode,
+              )
+            else
+              _InfoTile(
+                label: 'Household status',
+                value: household == null ? 'Not joined yet' : 'Joined',
+              ),
+            if (auth.isOwner)
+              _DetailTile(
+                label: 'Additional homeowner code',
+                value: auth.homeownerInviteCode.isEmpty
+                    ? '—'
+                    : auth.homeownerInviteCode,
+              )
+            else
+              const SizedBox.shrink(),
+            if (auth.isOwner) ...[
+              _DetailTile(
+                label: 'Delivery address',
+                value: household?.deliveryAddress?.trim().isNotEmpty == true
+                    ? household!.deliveryAddress!
+                    : '—',
+              ),
+              _DetailTile(
+                label: 'Delivery contact',
+                value: household?.deliveryContactName?.trim().isNotEmpty == true
+                    ? household!.deliveryContactName!
+                    : '—',
+              ),
+              _DetailTile(
+                label: 'Delivery phone',
+                value: household?.deliveryPhone?.trim().isNotEmpty == true
+                    ? household!.deliveryPhone!
+                    : '—',
+              ),
+              _DetailTile(
+                label: 'SMS delivery notes',
+                value: household?.deliverySmsNotes?.trim().isNotEmpty == true
+                    ? household!.deliverySmsNotes!
+                    : '—',
+              ),
+              _DetailTile(
+                label: 'Supermarket delivery notes',
+                value: household?.supermarketDeliveryNotes?.trim().isNotEmpty == true
+                    ? household!.supermarketDeliveryNotes!
+                    : '—',
+              ),
+            ] else
+              const SizedBox.shrink(),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Edit profile'),
+                onPressed: () => setState(() => _editing = true),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -608,8 +927,8 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
     final auth = context.watch<AuthProvider>();
 
     return _SheetShell(
-      title: 'Home manager',
-      subtitle: 'Add or remove managers and share the sign-up code securely.',
+      title: 'Household access',
+      subtitle: 'Share separate codes for managers and additional homeowners, then remove access when needed.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -639,7 +958,7 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
                   children: [
                     Expanded(
                       child: Text(
-                        auth.ownerInviteCode,
+                        auth.managerInviteCode,
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
@@ -651,7 +970,7 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
                     TextButton.icon(
                       onPressed: () async {
                         await Clipboard.setData(
-                          ClipboardData(text: auth.ownerInviteCode),
+                          ClipboardData(text: auth.managerInviteCode),
                         );
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -676,6 +995,158 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceLight,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Additional homeowner code',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        auth.homeownerInviteCode.isEmpty
+                            ? '—'
+                            : auth.homeownerInviteCode,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.1,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: auth.homeownerInviteCode.isEmpty
+                          ? null
+                          : () async {
+                              await Clipboard.setData(
+                                ClipboardData(
+                                  text: auth.homeownerInviteCode,
+                                ),
+                              );
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Additional homeowner code copied ✓'),
+                                ),
+                              );
+                            },
+                      icon: const Icon(Icons.copy_outlined, size: 16),
+                      label: const Text('Copy'),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Share this code with other homeowners so they join the same household instead of creating a second one.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Linked homeowners',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          if (auth.homeowners.isEmpty)
+            const _InlineEmpty(text: 'No homeowners linked yet.')
+          else
+            ...auth.homeowners.map(
+              (homeowner) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppColors.primaryTeal.withValues(
+                        alpha: 0.1,
+                      ),
+                      child: Text(
+                        homeowner.fullName.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          color: AppColors.primaryTeal,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  homeowner.fullName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (homeowner.id == auth.household?.createdBy)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryTeal.withValues(
+                                      alpha: 0.08,
+                                    ),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: const Text(
+                                    'Primary',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primaryTeal,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          Text(
+                            homeowner.email,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 20),
           const Text(
             'Linked managers',
@@ -730,13 +1201,25 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
                     ),
                     TextButton(
                       onPressed: () async {
-                        await auth.removeHouseManager(manager.id);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${manager.fullName} removed'),
-                          ),
-                        );
+                        try {
+                          await auth.removeHouseManager(manager.id);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('${manager.fullName} removed'),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                e.toString().replaceFirst('Exception: ', ''),
+                              ),
+                              backgroundColor: Colors.red.shade700,
+                            ),
+                          );
+                        }
                       },
                       child: const Text('Remove'),
                     ),
@@ -775,8 +1258,9 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
             ),
             onPressed: () async {
               if (_nameCtrl.text.trim().isEmpty ||
-                  _emailCtrl.text.trim().isEmpty)
+                  _emailCtrl.text.trim().isEmpty) {
                 return;
+              }
               await auth.addHouseManager(
                 fullName: _nameCtrl.text.trim(),
                 email: _emailCtrl.text.trim(),
@@ -792,6 +1276,161 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
             child: const Text('Add manager'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _JoinHouseholdSheet extends StatefulWidget {
+  const _JoinHouseholdSheet();
+
+  @override
+  State<_JoinHouseholdSheet> createState() => _JoinHouseholdSheetState();
+}
+
+class _JoinHouseholdSheetState extends State<_JoinHouseholdSheet> {
+  final _inviteCtrl = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _inviteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _join() async {
+    if (_submitting) return;
+    final code = _inviteCtrl.text.trim().toUpperCase();
+    if (code.length != 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Invite codes are 8 characters — check with the homeowner.'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      await context.read<AuthProvider>().joinHouseholdAsManager(inviteCode: code);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SheetShell(
+      title: 'Join household',
+      subtitle: 'Enter the homeowner\'s 8-character invite code to link this manager account.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _inviteCtrl,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            enableSuggestions: false,
+            maxLength: 8,
+            decoration: const InputDecoration(
+              labelText: 'Homeowner invite code',
+              prefixIcon: Icon(Icons.vpn_key_outlined),
+              hintText: 'e.g. A1B2C3D4',
+              counterText: '',
+            ),
+            onSubmitted: (_) => _join(),
+          ),
+          const SizedBox(height: 12),
+          const _InlineEmpty(
+            text: 'Once linked, the household data will load immediately and the owner will see you as their manager.',
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _submitting ? null : _join,
+              child: _submitting
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text('Join household'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoHouseholdBody extends StatelessWidget {
+  const _NoHouseholdBody();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: HomeFlowCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryTeal.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.link_outlined,
+                    color: AppColors.primaryTeal,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Join a household to get started',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Your manager account is ready. Open the left menu and tap Join household, or use the button below, then enter the homeowner\'s 8-character invite code.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => showJoinHouseholdSheet(context),
+                    icon: const Icon(Icons.vpn_key_outlined),
+                    label: const Text('Enter invite code'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -913,6 +1552,44 @@ class _InfoTile extends StatelessWidget {
               ),
             ),
           ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailTile extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),

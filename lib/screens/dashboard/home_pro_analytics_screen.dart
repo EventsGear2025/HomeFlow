@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,11 +8,16 @@ import '../../providers/laundry_provider.dart';
 import '../../providers/meal_provider.dart';
 import '../../providers/supply_provider.dart';
 import '../../providers/utility_provider.dart';
+import '../../models/utility_tracker.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/home_pro_intelligence.dart';
+import '../../utils/smart_tips_engine.dart';
 import '../../utils/upgrade_flow.dart';
 import '../../widgets/common_widgets.dart';
-import '../../widgets/smart_tips_section.dart';
+
+// ─────────────────────────────────────────────
+// Main screen
+// ─────────────────────────────────────────────
 
 class HomeProAnalyticsScreen extends StatelessWidget {
   const HomeProAnalyticsScreen({super.key});
@@ -35,6 +42,13 @@ class HomeProAnalyticsScreen extends StatelessWidget {
       childrenCount: children.length,
     );
 
+    final urgentTips = report.tips
+        .where((t) =>
+            t.severity == TipSeverity.alert ||
+            t.severity == TipSeverity.warning)
+        .take(3)
+        .toList();
+
     return Scaffold(
       backgroundColor: AppColors.surfaceLight,
       appBar: AppBar(
@@ -42,7 +56,7 @@ class HomeProAnalyticsScreen extends StatelessWidget {
         backgroundColor: AppColors.surfaceLight,
         surfaceTintColor: Colors.transparent,
         title: const Text(
-          'Home Pro Intelligence',
+          'Home Intelligence',
           style: TextStyle(
             fontWeight: FontWeight.w800,
             color: AppColors.textPrimary,
@@ -52,21 +66,20 @@ class HomeProAnalyticsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          _AnalyticsHero(
-            report: report,
-            householdName: auth.household?.householdName ?? 'Your Household',
-          ),
+          // 1. Home Status
+          _HomeStatusCard(report: report),
+
           if (!auth.isHomePro) ...[
             const SizedBox(height: 16),
             PremiumAnalyticsEntryCard(
-              title: 'Unlock Home Pro Intelligence',
+              title: 'Unlock Home Intelligence',
               subtitle:
-                  'Turn household data into weekly rhythm, pressure forecasts, and practical playbooks.',
+                  'See what needs attention, get a weekly outlook, and know what to do next.',
               icon: Icons.workspace_premium_rounded,
               highlights: const <String>[
-                'Home pulse score',
-                '7-day pressure map',
-                'Household archetype',
+                'Home status overview',
+                'This week\'s outlook',
+                'Clear next actions',
               ],
               isUnlocked: false,
               onPressed: () => openHomeProUpgrade(
@@ -75,118 +88,310 @@ class HomeProAnalyticsScreen extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 20),
-          const SectionHeader(title: 'Household Operating Map'),
-          const SizedBox(height: 12),
-          HomeFlowCard(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Larger, brighter nodes show routines doing more work to keep the home calm.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _HomeOrbitBoard(
-                  homePulse: report.homePulse,
-                  modules: report.modules,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          const SectionHeader(title: '7-Day Pressure Map'),
-          const SizedBox(height: 12),
-          _PressureMapCard(
-            dayLabels: report.dayLabels,
-            rows: report.forecastRows,
-          ),
-          const SizedBox(height: 20),
-          const SectionHeader(title: 'This Week\'s Playbook'),
-          const SizedBox(height: 12),
-          ...report.recommendations.map(
-            (recommendation) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _RecommendationCard(recommendation: recommendation),
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (report.tips.isNotEmpty)
-            SmartTipsSection(
-              tips: report.tips,
-              title: 'Live Smart Tips',
-            )
-          else
-            HomeFlowCard(
+
+          // 2. Needs Attention
+          if (urgentTips.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _FoldableSection(
+              icon: Icons.warning_amber_rounded,
+              iconColor: AppColors.accentOrange,
+              title: 'Needs Attention',
+              summary: '${urgentTips.length} item${urgentTips.length == 1 ? '' : 's'} need attention',
+              summaryColor: AppColors.accentOrange,
+              initiallyExpanded: true,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Live Smart Tips',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                children: urgentTips.map(
+                  (tip) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _AttentionCard(tip: tip),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'No urgent household signals yet. Keep logging meals, refills, and routines to make this screen even sharper.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
+                ).toList(),
               ),
             ),
-          if (report.supplyMonthlySpend.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            const SectionHeader(title: 'Monthly Supply Spend'),
-            const SizedBox(height: 12),
-            _SupplySpendCard(rows: report.supplyMonthlySpend),
           ],
+
+          // 3. Module Health
+          const SizedBox(height: 12),
+          _FoldableSection(
+            icon: Icons.dashboard_outlined,
+            title: 'Module Health',
+            summary: () {
+              final onTrack = report.modules.where((m) => m.score >= 70).length;
+              return '$onTrack/${report.modules.length} modules on track';
+            }(),
+            child: _ModuleHealthList(modules: report.modules),
+          ),
+
+          // 4. This Week
+          const SizedBox(height: 12),
+          _FoldableSection(
+            icon: Icons.calendar_today_outlined,
+            title: 'This Week',
+            summary: () {
+              final busy = report.forecastRows
+                  .expand((r) => r.values)
+                  .fold(0, (a, b) => a + b);
+              return busy == 0 ? 'Quiet week ahead' : 'Activity forecast ready';
+            }(),
+            child: _WeeklyTimelineCard(
+              dayLabels: report.dayLabels,
+              forecastRows: report.forecastRows,
+            ),
+          ),
+
+          // 5. What to Do Next
+          const SizedBox(height: 12),
+          _FoldableSection(
+            icon: Icons.checklist_rounded,
+            title: 'What to Do Next',
+            summary: '${report.recommendations.take(3).length} action${report.recommendations.take(3).length == 1 ? '' : 's'} pending',
+            child: Column(
+              children: report.recommendations.take(3).map(
+                (rec) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ActionCard(recommendation: rec),
+                ),
+              ).toList(),
+            ),
+          ),
+
+          // 6. Household Rhythm
+          const SizedBox(height: 12),
+          _FoldableSection(
+            icon: Icons.loop_rounded,
+            title: 'Household Rhythm',
+            summary: () {
+              final score = report.rhythmScore;
+              if (score >= 70) return 'Rhythm score: $score — great consistency';
+              if (score >= 50) return 'Rhythm score: $score — steady';
+              return 'Rhythm score: $score — needs attention';
+            }(),
+            summaryColor: report.rhythmScore >= 70
+                ? AppColors.success
+                : report.rhythmScore >= 50
+                    ? AppColors.warningAmber
+                    : AppColors.accentOrange,
+            child: _RhythmCard(modules: report.modules),
+          ),
+
+          // 7. Deeper Insights
+          const SizedBox(height: 12),
+          _FoldableSection(
+            icon: Icons.analytics_outlined,
+            title: 'Deeper Insights',
+            summary: 'Weekly outlook · Supply spend · Profile',
+            child: _DeepInsightsContent(report: report, utilities: visibleUtilities),
+          ),
         ],
       ),
     );
   }
 }
 
-class _AnalyticsHero extends StatelessWidget {
-  const _AnalyticsHero({
-    required this.report,
-    required this.householdName,
+// ─────────────────────────────────────────────
+// Shared: foldable section wrapper
+// ─────────────────────────────────────────────
+
+class _FoldableSection extends StatefulWidget {
+  const _FoldableSection({
+    required this.title,
+    required this.summary,
+    required this.child,
+    this.icon,
+    this.iconColor,
+    this.summaryColor,
+    this.initiallyExpanded = false,
   });
 
-  final HomeProIntelligenceReport report;
-  final String householdName;
+  final String title;
+  final String summary;
+  final Widget child;
+  final IconData? icon;
+  final Color? iconColor;
+  final Color? summaryColor;
+  final bool initiallyExpanded;
+
+  @override
+  State<_FoldableSection> createState() => _FoldableSectionState();
+}
+
+class _FoldableSectionState extends State<_FoldableSection>
+    with SingleTickerProviderStateMixin {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: <Color>[
-            AppColors.primaryTeal,
-            AppColors.secondaryTeal,
-            AppColors.cardBlue,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Ribbon ──────────────────────────────────────────────
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: _expanded
+                  ? const BorderRadius.vertical(top: Radius.circular(14))
+                  : BorderRadius.circular(14),
+              border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+            ),
+            child: Row(
+              children: [
+                if (widget.icon != null) ...[
+                  Icon(widget.icon,
+                      size: 17,
+                      color: widget.iconColor ?? AppColors.primaryTeal),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.summary,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: widget.summaryColor ?? AppColors.textSecondary,
+                          fontWeight: widget.summaryColor != null
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
+          ),
         ),
+        // ── Expanded content ─────────────────────────────────────
+        if (_expanded)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              border: Border(
+                left: BorderSide(color: AppColors.divider.withValues(alpha: 0.6)),
+                right: BorderSide(color: AppColors.divider.withValues(alpha: 0.6)),
+                bottom: BorderSide(color: AppColors.divider.withValues(alpha: 0.6)),
+              ),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
+              child: widget.child,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Shared: section label
+// ─────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title, this.count});
+
+  final String title;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        if (count != null) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.accentOrange.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppColors.accentOrange,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Section 1: Home Status card
+// ─────────────────────────────────────────────
+
+class _ChipData {
+  const _ChipData({
+    required this.label,
+    required this.color,
+    required this.bg,
+  });
+  final String label;
+  final Color color;
+  final Color bg;
+}
+
+class _HomeStatusCard extends StatelessWidget {
+  const _HomeStatusCard({required this.report});
+
+  final HomeProIntelligenceReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusLabel = _statusLabel(report.homePulse);
+    final statusColor = _statusColor(report.homePulse);
+    final chips = _quickChips(report);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryTeal.withValues(alpha: 0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -195,118 +400,208 @@ class _AnalyticsHero extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: const Text(
-                  'HOME PRO INTELLIGENCE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.7,
-                  ),
+              const Icon(
+                Icons.home_rounded,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Home status',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const Spacer(),
-              _HeroTag(
-                label: householdName,
-                tone: AppColors.tagTint,
-                textColor: AppColors.secondaryTeal,
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          Text(
-            report.headline,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              height: 1.05,
-            ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           Text(
             report.summary,
             style: const TextStyle(
-              color: AppColors.tagTint,
-              fontSize: 14,
-              height: 1.5,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+              height: 1.45,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _HeroMetricCard(
-                label: 'Home pulse',
-                value: '${report.homePulse}',
-                note: report.personaTitle,
-              ),
-              _HeroMetricCard(
-                label: 'Recovered this week',
-                value: '${report.calmHoursRecovered.toStringAsFixed(1)}h',
-                note: 'estimated calm',
-              ),
-              _HeroMetricCard(
-                label: 'Surprise shield',
-                value: '${report.surpriseShield}',
-                note: '${report.watchpointCount} live signals',
-              ),
-            ],
+            spacing: 8,
+            runSpacing: 8,
+            children: chips
+                .map(
+                  (chip) => Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: chip.bg,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      chip.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: chip.color,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
           ),
-          const SizedBox(height: 18),
+        ],
+      ),
+    );
+  }
+
+  String _statusLabel(int pulse) {
+    if (pulse >= 75) return 'Good';
+    if (pulse >= 55) return 'Fair';
+    return 'Needs attention';
+  }
+
+  Color _statusColor(int pulse) {
+    if (pulse >= 75) return AppColors.success;
+    if (pulse >= 55) return AppColors.warningAmber;
+    return AppColors.accentOrange;
+  }
+
+  List<_ChipData> _quickChips(HomeProIntelligenceReport r) {
+    final chips = <_ChipData>[];
+
+    // Chip 1: areas needing attention
+    final attnCount = r.modules.where((m) => m.score < 55).length;
+    if (attnCount > 0) {
+      chips.add(_ChipData(
+        label: '$attnCount area${attnCount == 1 ? '' : 's'} need attention',
+        color: AppColors.accentOrange,
+        bg: AppColors.accentOrange.withValues(alpha: 0.09),
+      ));
+    } else {
+      chips.add(_ChipData(
+        label: 'All areas okay',
+        color: AppColors.success,
+        bg: AppColors.success.withValues(alpha: 0.08),
+      ));
+    }
+
+    // Chip 2: supply status
+    final supplyModule =
+        r.modules.where((m) => m.label == 'Supplies').firstOrNull;
+    if (supplyModule != null) {
+      if (supplyModule.score < 55) {
+        final label = supplyModule.subtitle.length > 28
+            ? 'Supplies low'
+            : supplyModule.subtitle;
+        chips.add(_ChipData(
+          label: label,
+          color: AppColors.warningAmber,
+          bg: AppColors.warningAmber.withValues(alpha: 0.09),
+        ));
+      } else {
+        chips.add(_ChipData(
+          label: 'Supplies okay',
+          color: AppColors.success,
+          bg: AppColors.success.withValues(alpha: 0.08),
+        ));
+      }
+    }
+
+    // Chip 3: utilities status
+    final utilModule =
+        r.modules.where((m) => m.label == 'Utilities').firstOrNull;
+    if (utilModule != null) {
+      if (utilModule.score < 55) {
+        chips.add(_ChipData(
+          label: 'Utilities need attention',
+          color: AppColors.accentOrange,
+          bg: AppColors.accentOrange.withValues(alpha: 0.09),
+        ));
+      } else {
+        chips.add(_ChipData(
+          label: 'Utilities okay',
+          color: AppColors.primaryTeal,
+          bg: AppColors.primaryTeal.withValues(alpha: 0.07),
+        ));
+      }
+    }
+
+    return chips;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Section 2: Needs Attention
+// ─────────────────────────────────────────────
+
+class _AttentionCard extends StatelessWidget {
+  const _AttentionCard({required this.tip});
+
+  final SmartTip tip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tip.color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white24),
+              color: tip.bgColor,
+              borderRadius: BorderRadius.circular(10),
             ),
+            child: Icon(tip.icon, color: tip.color, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.blur_on_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      report.personaTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
                 Text(
-                  report.personaSummary,
+                  tip.title,
                   style: const TextStyle(
-                    color: AppColors.surfaceTinted,
-                    fontSize: 13,
-                    height: 1.45,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: report.signals
-                      .map((signal) => _SignalCard(signal: signal))
-                      .toList(),
+                const SizedBox(height: 4),
+                Text(
+                  tip.body,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -317,310 +612,129 @@ class _AnalyticsHero extends StatelessWidget {
   }
 }
 
-class _HeroTag extends StatelessWidget {
-  const _HeroTag({
-    required this.label,
-    required this.tone,
-    required this.textColor,
-  });
+// ─────────────────────────────────────────────
+// Section 3: Module Health
+// ─────────────────────────────────────────────
 
-  final String label;
-  final Color tone;
-  final Color textColor;
+class _ModuleHealthList extends StatelessWidget {
+  const _ModuleHealthList({required this.modules});
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: tone,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroMetricCard extends StatelessWidget {
-  const _HeroMetricCard({
-    required this.label,
-    required this.value,
-    required this.note,
-  });
-
-  final String label;
-  final String value;
-  final String note;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 146,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.surfaceCard,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            note,
-            style: const TextStyle(
-              color: AppColors.tagTint,
-              fontSize: 11.5,
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SignalCard extends StatelessWidget {
-  const _SignalCard({required this.signal});
-
-  final HomeProSignalMetric signal;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 184,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            signal.label,
-            style: const TextStyle(
-              color: AppColors.surfaceCard,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${signal.score}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            signal.note,
-            style: const TextStyle(
-              color: AppColors.surfaceMuted,
-              fontSize: 11.5,
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HomeOrbitBoard extends StatelessWidget {
-  const _HomeOrbitBoard({
-    required this.homePulse,
-    required this.modules,
-  });
-
-  final int homePulse;
   final List<HomeProModuleNode> modules;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 340,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: <Color>[AppColors.primaryTeal, Color(0xFF0A2850)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
       ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _OrbitBackdropPainter(),
-            ),
-          ),
-          Align(
-            alignment: Alignment.center,
-            child: Container(
-              width: 126,
-              height: 126,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: <Color>[AppColors.uiBlue, AppColors.primaryTeal],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.uiBlue.withValues(alpha: 0.24),
-                    blurRadius: 24,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'HOME PULSE',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '$homePulse',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          ...modules.map(
-            (module) => Align(
-              alignment: _alignmentForModule(module.label),
-              child: _OrbitModuleBubble(module: module),
-            ),
-          ),
-        ],
+      child: Column(
+        children: modules.asMap().entries.map((entry) {
+          final isLast = entry.key == modules.length - 1;
+          return Column(
+            children: [
+              _ModuleHealthRow(module: entry.value),
+              if (!isLast)
+                const Divider(height: 1, indent: 16, endIndent: 16),
+            ],
+          );
+        }).toList(),
       ),
     );
   }
-
-  Alignment _alignmentForModule(String label) {
-    switch (label) {
-      case 'Meals':
-        return const Alignment(-0.72, -0.58);
-      case 'Utilities':
-        return const Alignment(0.72, -0.56);
-      case 'Laundry':
-        return const Alignment(-0.68, 0.62);
-      case 'Supplies':
-        return const Alignment(0.7, 0.6);
-      default:
-        return const Alignment(0, -0.74);
-    }
-  }
 }
 
-class _OrbitModuleBubble extends StatelessWidget {
-  const _OrbitModuleBubble({required this.module});
+class _ModuleHealthRow extends StatelessWidget {
+  const _ModuleHealthRow({required this.module});
 
   final HomeProModuleNode module;
 
   @override
   Widget build(BuildContext context) {
-    final accent = _toneColor(module.tone);
-    final bubbleSize = 88 + (module.score * 0.28);
+    final statusColor = _scoreColor(module.score);
+    final statusLabel = _scoreLabel(module.score);
 
-    return Container(
-      width: bubbleSize,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accent.withValues(alpha: 0.38)),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(
-                _iconForModule(module.label),
-                color: accent,
-                size: 18,
-              ),
-              const Spacer(),
-              Text(
-                '${module.score}',
-                style: TextStyle(
-                  color: accent,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            module.label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _moduleIcon(module.label),
+              color: statusColor,
+              size: 18,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      module.label,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: module.score / 100,
+                    minHeight: 4,
+                    backgroundColor: statusColor.withValues(alpha: 0.10),
+                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  module.subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
           Text(
-            module.subtitle,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.surfaceCard,
-              fontSize: 11,
-              height: 1.35,
+            '${module.score}',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: statusColor,
             ),
           ),
         ],
@@ -628,7 +742,19 @@ class _OrbitModuleBubble extends StatelessWidget {
     );
   }
 
-  IconData _iconForModule(String label) {
+  Color _scoreColor(int score) {
+    if (score >= 70) return AppColors.success;
+    if (score >= 50) return AppColors.warningAmber;
+    return AppColors.accentOrange;
+  }
+
+  String _scoreLabel(int score) {
+    if (score >= 70) return 'Good';
+    if (score >= 50) return 'Fair';
+    return 'Needs attention';
+  }
+
+  IconData _moduleIcon(String label) {
     switch (label) {
       case 'Meals':
         return Icons.restaurant_rounded;
@@ -639,82 +765,802 @@ class _OrbitModuleBubble extends StatelessWidget {
       case 'Utilities':
         return Icons.bolt_rounded;
       default:
-        return Icons.auto_awesome_rounded;
+        return Icons.home_rounded;
     }
   }
 }
 
-class _OrbitBackdropPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final ringPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = AppColors.uiBlue.withValues(alpha: 0.18);
-    final linePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = Colors.white.withValues(alpha: 0.08);
+// ─────────────────────────────────────────────
+// Section 4: This Week — 7-day readiness strip
+// ─────────────────────────────────────────────
 
-    for (final radius in <double>[60, 104, 148]) {
-      canvas.drawCircle(center, radius, ringPaint);
-    }
-
-    canvas.drawLine(
-      Offset(size.width * 0.18, size.height * 0.2),
-      center,
-      linePaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.82, size.height * 0.21),
-      center,
-      linePaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.2, size.height * 0.79),
-      center,
-      linePaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.8, size.height * 0.78),
-      center,
-      linePaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _PressureMapCard extends StatelessWidget {
-  const _PressureMapCard({
+class _WeeklyTimelineCard extends StatelessWidget {
+  const _WeeklyTimelineCard({
     required this.dayLabels,
-    required this.rows,
+    required this.forecastRows,
   });
 
   final List<String> dayLabels;
-  final List<HomeProForecastRow> rows;
+  final List<HomeProForecastRow> forecastRows;
+
+  int _dayPressure(int dayIdx) {
+    if (forecastRows.isEmpty) return 0;
+    return forecastRows
+        .map((r) => dayIdx < r.values.length ? r.values[dayIdx] : 0)
+        .reduce(math.max);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return HomeFlowCard(
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Soft cells mean a calmer day. Warmer cells show where the next seven days may ask more of you.',
-            style: TextStyle(
+          Row(
+            children: List.generate(
+              dayLabels.length,
+              (i) => Expanded(
+                child: _DayCell(
+                  label: dayLabels[i],
+                  pressure: _dayPressure(i),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: const [
+              _LegendDot(color: AppColors.highlightBlue, label: 'Calm'),
+              SizedBox(width: 14),
+              _LegendDot(color: AppColors.warningAmber, label: 'Watch'),
+              SizedBox(width: 14),
+              _LegendDot(color: AppColors.accentOrange, label: 'Attention'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayCell extends StatelessWidget {
+  const _DayCell({required this.label, required this.pressure});
+
+  final String label;
+  final int pressure;
+
+  Color _pressureColor(int v) {
+    if (v >= 75) return AppColors.accentOrange;
+    if (v >= 50) return AppColors.warningAmber;
+    return AppColors.highlightBlue;
+  }
+
+  String _pressureLabel(int v) {
+    if (v >= 75) return 'Attention';
+    if (v >= 50) return 'Watch';
+    return 'Calm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _pressureColor(pressure);
+    final statusText = _pressureLabel(pressure);
+
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+          ),
+          child: pressure >= 50
+              ? Icon(
+                  pressure >= 75
+                      ? Icons.priority_high_rounded
+                      : Icons.remove_rounded,
+                  size: 14,
+                  color: color,
+                )
+              : Center(
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          statusText,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Section 5: What to Do Next
+// ─────────────────────────────────────────────
+
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({required this.recommendation});
+
+  final HomeProRecommendation recommendation;
+
+  String _typeLabel(String tone) {
+    switch (tone) {
+      case 'warning':
+        return 'Urgent now';
+      case 'strong':
+        return 'Keep doing this';
+      default:
+        return 'Do today';
+    }
+  }
+
+  Color _typeColor(String tone) {
+    switch (tone) {
+      case 'warning':
+        return AppColors.accentOrange;
+      case 'strong':
+        return AppColors.success;
+      default:
+        return AppColors.warningAmber;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final typeLabel = _typeLabel(recommendation.tone);
+    final typeColor = _typeColor(recommendation.tone);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: typeColor.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              typeLabel,
+              style: TextStyle(
+                color: typeColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            recommendation.title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            recommendation.body,
+            style: const TextStyle(
               fontSize: 13,
               color: AppColors.textSecondary,
               height: 1.45,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 14),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Section 6: Household Rhythm
+// ─────────────────────────────────────────────
+
+class _RhythmCard extends StatelessWidget {
+  const _RhythmCard({required this.modules});
+
+  final List<HomeProModuleNode> modules;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        children: modules.asMap().entries.map((entry) {
+          final isLast = entry.key == modules.length - 1;
+          return Column(
+            children: [
+              _RhythmRow(module: entry.value),
+              if (!isLast)
+                const Divider(height: 1, indent: 16, endIndent: 16),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _RhythmRow extends StatelessWidget {
+  const _RhythmRow({required this.module});
+
+  final HomeProModuleNode module;
+
+  String get _trendLabel {
+    if (module.score >= 70) return '${module.label} consistency ↑ this week';
+    if (module.score >= 50) return '${module.label} is steady';
+    return '${module.label} needs more attention';
+  }
+
+  String get _trendBadge {
+    if (module.score >= 70) return 'On track';
+    if (module.score >= 50) return 'Steady';
+    return 'Behind';
+  }
+
+  IconData get _trendIcon {
+    if (module.score >= 70) return Icons.trending_up_rounded;
+    if (module.score >= 50) return Icons.trending_flat_rounded;
+    return Icons.trending_down_rounded;
+  }
+
+  Color get _trendColor {
+    if (module.score >= 70) return AppColors.success;
+    if (module.score >= 50) return AppColors.warningAmber;
+    return AppColors.accentOrange;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _trendLabel,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  module.subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.3,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _trendColor.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_trendIcon, size: 14, color: _trendColor),
+                const SizedBox(width: 4),
+                Text(
+                  _trendBadge,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _trendColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Section 7: Deeper Insights content
+// ─────────────────────────────────────────────
+
+class _DeepInsightsContent extends StatelessWidget {
+  const _DeepInsightsContent({required this.report, required this.utilities});
+
+  final HomeProIntelligenceReport report;
+  final List<UtilityTracker> utilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final waterItems = utilities.where(
+      (u) => u.type == UtilityType.waterBill && u.waterBillUnitsUsed != null,
+    ).toList();
+    final electricityItems = utilities
+        .where((u) => u.type == UtilityType.electricity && !u.isPostpaid)
+        .toList();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (waterItems.isNotEmpty) ...[            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _SectionLabel(title: 'Water Usage'),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: _WaterUsageTile(items: waterItems),
+            ),
+            const SizedBox(height: 20),
+          ],
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: _SectionLabel(title: 'Weekly Outlook'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _OutlookCard(
+              dayLabels: report.dayLabels,
+              rows: report.forecastRows,
+            ),
+          ),
+          if (report.supplyMonthlySpend.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _SectionLabel(title: 'Monthly Supply Spend'),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _SupplySpendCard(rows: report.supplyMonthlySpend),
+            ),
+          ],
+          if (electricityItems.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _SectionLabel(title: 'Electricity Tokens'),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _ElectricityTokenInsightsCard(items: electricityItems),
+            ),
+          ],
+          const SizedBox(height: 20),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: _SectionLabel(title: 'Household Profile'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: AppColors.divider.withValues(alpha: 0.6)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    report.personaTitle,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    report.personaSummary,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Water usage tile (analytics)
+// ─────────────────────────────────────────────
+
+class _WaterUsageTile extends StatelessWidget {
+  const _WaterUsageTile({required this.items});
+
+  final List<UtilityTracker> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
-              const SizedBox(width: 88),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTeal.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.water_drop_outlined, size: 18, color: AppColors.primaryTeal),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Metered Water',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Units consumed this billing cycle',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...items.map((item) {
+            final units = item.waterBillUnitsUsed!;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: (units / 50.0).clamp(0.0, 1.0),
+                        minHeight: 8,
+                        backgroundColor: AppColors.primaryTeal.withValues(alpha: 0.1),
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryTeal),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${units.toStringAsFixed(1)} m³',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primaryTeal,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 2),
+          Text(
+            items.length == 1
+                ? 'Tip: track units monthly to spot usage spikes early.'
+                : '${items.length} meters tracked.',
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ElectricityTokenInsightsCard extends StatelessWidget {
+  const _ElectricityTokenInsightsCard({required this.items});
+
+  final List<UtilityTracker> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.accentYellow.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.bolt_outlined,
+                  size: 18,
+                  color: AppColors.statusLowText,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Prepaid Electricity',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Spend, units, and estimated runway from recent top-ups',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...items.map((item) {
+            final latest = item.latestElectricityTokenPurchase;
+            final monthSpend = item.electricityTokenSpendThisMonth;
+            final monthUnits = item.electricityTokenUnitsThisMonth;
+            final avgCost = item.electricityAverageCostPerUnit;
+            final avgDaily = item.electricityAverageDailyConsumption;
+            final daysLeft = item.electricityEstimatedDaysRemaining;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.divider.withValues(alpha: 0.6),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.label,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (latest != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Last top-up: KSh ${latest.amountSpent.toStringAsFixed(0)} for ${latest.unitsBought.toStringAsFixed(1)} kWh',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _InsightMetricChip(
+                        label: 'This month',
+                        value: 'KSh ${monthSpend.toStringAsFixed(0)}',
+                      ),
+                      _InsightMetricChip(
+                        label: 'Units bought',
+                        value: '${monthUnits.toStringAsFixed(1)} kWh',
+                      ),
+                      if (avgCost != null)
+                        _InsightMetricChip(
+                          label: 'Avg cost',
+                          value: 'KSh ${avgCost.toStringAsFixed(1)}/kWh',
+                        ),
+                      if (avgDaily != null)
+                        _InsightMetricChip(
+                          label: 'Avg use',
+                          value: '${avgDaily.toStringAsFixed(1)} kWh/day',
+                        ),
+                      if (daysLeft != null)
+                        _InsightMetricChip(
+                          label: 'Estimated left',
+                          value: '$daysLeft day${daysLeft == 1 ? '' : 's'}',
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightMetricChip extends StatelessWidget {
+  const _InsightMetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutlookCard extends StatelessWidget {
+  const _OutlookCard({required this.dayLabels, required this.rows});
+
+  final List<String> dayLabels;
+  final List<HomeProForecastRow> rows;
+
+  Color _heatColor(int value) {
+    if (value >= 78) return AppColors.accentOrange;
+    if (value >= 58) return AppColors.accentYellow;
+    if (value >= 30) return AppColors.highlightBlue;
+    return AppColors.surfaceMuted;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const SizedBox(width: 72),
               ...dayLabels.map(
                 (label) => Expanded(
                   child: Center(
@@ -734,75 +1580,31 @@ class _PressureMapCard extends StatelessWidget {
           const SizedBox(height: 10),
           ...rows.map(
             (row) => Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 88,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            row.label,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ),
-                      ...row.values.map(
-                        (value) => Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            child: Container(
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: _pressureColor(value),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.45),
-                                ),
-                              ),
-                              child: value >= 78
-                                  ? const Center(
-                                      child: Icon(
-                                        Icons.priority_high_rounded,
-                                        size: 14,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : value >= 58
-                                      ? Center(
-                                          child: Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: const BoxDecoration(
-                                              color: Colors.white,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                        )
-                                      : null,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 88),
+                  SizedBox(
+                    width: 72,
                     child: Text(
-                      row.summary,
+                      row.label,
                       style: const TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
-                        height: 1.35,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  ...row.values.map(
+                    (value) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Container(
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: _heatColor(value),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -810,232 +1612,280 @@ class _PressureMapCard extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 4),
+          Row(
+            children: const [
+              _LegendDot(color: AppColors.surfaceMuted, label: 'Quiet'),
+              SizedBox(width: 10),
+              _LegendDot(color: AppColors.highlightBlue, label: 'Active'),
+              SizedBox(width: 10),
+              _LegendDot(color: AppColors.accentYellow, label: 'Watch'),
+              SizedBox(width: 10),
+              _LegendDot(color: AppColors.accentOrange, label: 'Urgent'),
+            ],
+          ),
         ],
       ),
     );
   }
-
-  Color _pressureColor(int value) {
-    if (value >= 78) {
-      return AppColors.accentOrange;
-    }
-    if (value >= 58) {
-      return AppColors.accentYellow;
-    }
-    if (value >= 30) {
-      return AppColors.highlightBlue;
-    }
-    return AppColors.surfaceMuted;
-  }
 }
 
-class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.recommendation});
+class _SupplySpendCard extends StatelessWidget {
+  const _SupplySpendCard({required this.rows});
 
-  final HomeProRecommendation recommendation;
+  final List<SupplySpendRow> rows;
+
+  static const _categoryIcons = <String, IconData>{
+    'Food & Groceries': Icons.shopping_basket_outlined,
+    'Cleaning': Icons.cleaning_services_outlined,
+    'Personal Care': Icons.self_improvement_outlined,
+    'Baby & Kids': Icons.child_care_outlined,
+    'Pet Supplies': Icons.pets_outlined,
+    'Kitchen': Icons.kitchen_outlined,
+    'Beverages': Icons.local_cafe_outlined,
+    'Health': Icons.medication_outlined,
+  };
+
+  Color _trendColor(double thisM, double lastM) {
+    if (lastM <= 0) return AppColors.textSecondary;
+    return thisM > lastM ? AppColors.accentOrange : AppColors.success;
+  }
+
+  IconData _trendIcon(double thisM, double lastM) {
+    if (lastM <= 0) return Icons.fiber_new_outlined;
+    return thisM > lastM ? Icons.trending_up_rounded : Icons.trending_down_rounded;
+  }
+
+  String _trendLabel(double thisM, double lastM) {
+    if (lastM <= 0) return 'First month';
+    final pct = ((thisM - lastM) / lastM * 100).round();
+    return pct == 0 ? 'Same as last' : '${pct > 0 ? '+' : ''}$pct% vs last';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final accent = _toneColor(recommendation.tone);
+    final totalThis = rows.fold<double>(0, (s, r) => s + r.thisMonthSpend);
+    final totalLast = rows.fold<double>(0, (s, r) => s + r.lastMonthSpend);
+    final maxSpend = rows.fold<double>(0, (s, r) => r.thisMonthSpend > s ? r.thisMonthSpend : s);
+    final now = DateTime.now();
+    final monthLabel = _monthName(now.month);
 
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: accent.withValues(alpha: 0.22)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        recommendation.badge,
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      recommendation.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
+          // ── Header ──────────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.primaryTeal.withValues(alpha: 0.04),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
+              children: [
+                const Icon(Icons.receipt_long_outlined,
+                    size: 18, color: AppColors.primaryTeal),
+                const SizedBox(width: 8),
+                Expanded(
                   child: Text(
-                    '${recommendation.score}',
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                    '$monthLabel supply spend',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryTeal,
                     ),
                   ),
                 ),
-              ),
-            ],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryTeal,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'KES ${_fmt(totalThis)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            recommendation.body,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-              height: 1.5,
+          const Divider(height: 1, color: AppColors.divider),
+          // ── Rows ────────────────────────────────────────────────
+          ...rows.map((row) {
+            final barFraction = maxSpend > 0 ? row.thisMonthSpend / maxSpend : 0.0;
+            final trendColor = _trendColor(row.thisMonthSpend, row.lastMonthSpend);
+            final trendIcon = _trendIcon(row.thisMonthSpend, row.lastMonthSpend);
+            final trendText = _trendLabel(row.thisMonthSpend, row.lastMonthSpend);
+            final catIcon = _categoryIcons[row.category] ?? Icons.inventory_2_outlined;
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Category icon chip
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(catIcon,
+                            size: 18, color: AppColors.primaryTeal),
+                      ),
+                      const SizedBox(width: 12),
+                      // Name + category
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.itemName,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              row.category,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // This month amount
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'KES ${_fmt(row.thisMonthSpend)}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryTeal,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(trendIcon, size: 12, color: trendColor),
+                              const SizedBox(width: 2),
+                              Text(
+                                trendText,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: trendColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Spend bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: barFraction,
+                      minHeight: 4,
+                      backgroundColor: AppColors.surfaceLight,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryTeal.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (row != rows.last)
+                    const Divider(height: 1, color: AppColors.divider),
+                ],
+              ),
+            );
+          }),
+          // ── Totals footer ────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.primaryTeal.withValues(alpha: 0.04),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Row(
+              children: [
+                const Icon(Icons.summarize_outlined,
+                    size: 16, color: AppColors.primaryTeal),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Total this month',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryTeal,
+                    ),
+                  ),
+                ),
+                if (totalLast > 0) ...[
+                  Text(
+                    'Last: KES ${_fmt(totalLast)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Text(
+                  'KES ${_fmt(totalThis)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryTeal,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
-}
 
-Color _toneColor(String tone) {
-  switch (tone) {
-    case 'strong':
-      return AppColors.primaryTeal;
-    case 'warning':
-      return AppColors.accentOrange;
-    default:
-      return AppColors.warningAmber;
+  String _fmt(double v) {
+    if (v >= 1000) {
+      final k = v / 1000;
+      return k == k.truncateToDouble() ? '${k.toInt()}k' : '${k.toStringAsFixed(1)}k';
+    }
+    return v.toStringAsFixed(0);
   }
-}
 
-class _SupplySpendCard extends StatelessWidget {
-  const _SupplySpendCard({required this.rows});
-  final List<SupplySpendRow> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    return HomeFlowCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Text(
-                'Item',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              Spacer(),
-              SizedBox(
-                width: 84,
-                child: Text(
-                  'This Month',
-                  textAlign: TextAlign.end,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 84,
-                child: Text(
-                  'Last Month',
-                  textAlign: TextAlign.end,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 16),
-          ...rows.map((row) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            row.itemName,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          Text(
-                            row.category,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(
-                      width: 84,
-                      child: Text(
-                        'KES ${row.thisMonthSpend.toStringAsFixed(0)}',
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryTeal,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 84,
-                      child: Text(
-                        row.lastMonthSpend > 0
-                            ? 'KES ${row.lastMonthSpend.toStringAsFixed(0)}'
-                            : '—',
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-        ],
-      ),
-    );
+  String _monthName(int m) {
+    const names = [
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return names[m];
   }
+
 }

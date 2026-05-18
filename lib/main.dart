@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'admin/admin_panel_screen.dart';
+import 'admin/admin_auth_gate.dart';
 import 'providers/auth_provider.dart';
 import 'providers/supply_provider.dart';
 import 'providers/meal_provider.dart';
@@ -10,6 +11,8 @@ import 'providers/laundry_provider.dart';
 import 'providers/staff_provider.dart';
 import 'providers/task_provider.dart';
 import 'providers/meal_timetable_provider.dart';
+import 'providers/price_compare_provider.dart';
+import 'providers/ad_provider.dart';
 import 'services/supabase_service.dart';
 import 'providers/utility_provider.dart';
 import 'utils/app_theme.dart';
@@ -26,7 +29,12 @@ class HomeFlowApp extends StatelessWidget {
 
   static final GoRouter _adminRouter = GoRouter(
     initialLocation: '/admin/dashboard',
+    redirect: (context, state) => adminAuthRedirect(state),
     routes: [
+      GoRoute(
+        path: '/admin/login',
+        builder: (context, state) => const AdminLoginScreen(),
+      ),
       GoRoute(
         path: '/admin/dashboard',
         builder: (context, state) => const AdminPanelScreen(
@@ -107,9 +115,16 @@ class HomeFlowApp extends StatelessWidget {
         ),
       ),
       GoRoute(
-        path: '/admin/settings',
+        path: '/admin/ads',
         builder: (context, state) => const AdminPanelScreen(
           selectedIndex: 10,
+          child: AdminAdsPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/admin/settings',
+        builder: (context, state) => const AdminPanelScreen(
+          selectedIndex: 11,
           child: AdminSettingsPage(),
         ),
       ),
@@ -130,6 +145,8 @@ class HomeFlowApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TaskProvider()),
         ChangeNotifierProvider(create: (_) => MealTimetableProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => PriceCompareProvider()),
+        ChangeNotifierProvider(create: (_) => AdProvider()),
       ],
       child: kIsWeb
           ? MaterialApp.router(

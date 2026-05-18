@@ -10,6 +10,7 @@ import '../models/meal_log.dart';
 import '../models/shopping_request.dart';
 import '../models/supply_item.dart';
 import '../models/task_item.dart';
+import '../services/supabase_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/app_constants.dart';
 import 'admin_mock_data.dart';
@@ -884,6 +885,35 @@ class AdminRepository {
     return presets.isEmpty ? AdminMockData.presetCategories : presets;
   }
 
+  Future<List<AdOfferRow>> fetchAdOfferRows() async {
+    final rows = await SupabaseService.client
+        .from('ad_offers')
+        .select()
+        .order('display_order');
+
+    if ((rows as List).isEmpty) return AdminMockData.adOfferRows;
+
+    return rows.whereType<Map>().map((row) {
+      final normalized = Map<String, dynamic>.from(row);
+      final expiresAt = normalized['expires_at'];
+      return AdOfferRow(
+        id: normalized['id']?.toString() ?? '',
+        advertiser: normalized['advertiser']?.toString() ?? '',
+        accentHex: normalized['accent_hex']?.toString() ?? '#1B8A4A',
+        productName: normalized['product_name']?.toString() ?? '',
+        oldPriceCents: (normalized['old_price_cents'] as num?)?.toInt() ?? 0,
+        newPriceCents: (normalized['new_price_cents'] as num?)?.toInt() ?? 0,
+        currency: normalized['currency']?.toString() ?? 'KES',
+        placement: normalized['placement']?.toString() ?? 'home',
+        category: normalized['category']?.toString() ?? 'Other',
+        displayOrder: (normalized['display_order'] as num?)?.toInt() ?? 0,
+        isActive: normalized['is_active'] as bool? ?? false,
+        expiresAt: expiresAt != null ? _formatDateTime(expiresAt.toString()) : null,
+        createdAt: _formatDateTime(normalized['created_at']?.toString() ?? ''),
+      );
+    }).toList();
+  }
+
   Future<List<SettingsItem>> fetchSettingsItems() async {
     final templates = await _guard(fetchNotificationTemplates, const <TemplateSummaryRow>[]);
     final alerts = await _guard(fetchSystemAlerts, const <SystemAlertRow>[]);
@@ -898,12 +928,16 @@ class AdminRepository {
     }).length;
     final activeTemplates = templates.where((row) => row.isActive).length;
     final openAlerts = alerts.where((row) => row.status != 'resolved').length;
+    final authService = SupabaseAuthService();
+    final currentAppRole = authService.currentAppRole ?? 'missing';
 
     return [
-      const SettingsItem(
+      SettingsItem(
         label: 'Admin access mode',
-        value: 'JWT app_role=admin',
-        description: 'Internal staff must carry the admin claim before admin RLS policies will grant access.',
+        value: 'JWT app_role=$currentAppRole',
+        description: authService.hasAdminAppRole
+            ? 'Current session carries the admin claim required by admin RLS policies.'
+            : 'Current session is missing the admin claim required by admin RLS policies.',
       ),
       SettingsItem(
         label: 'Active notification templates',
@@ -1799,7 +1833,7 @@ class AdminRepository {
       }
     }
 
-    return rows.first;
+    throw StateError('Household not found for $identifier');
   }
 
   Future<List<_TimedActivityLogRow>> _fetchAppActivityRows({

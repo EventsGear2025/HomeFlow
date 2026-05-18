@@ -129,6 +129,7 @@ class AdminPanelScreen extends StatelessWidget {
       7 => '/admin/support',
       8 => '/admin/activity-logs',
       9 => '/admin/admin-users',
+      10 => '/admin/ads',
       _ => '/admin/settings',
     };
   context.go(path);
@@ -156,6 +157,8 @@ class AdminPanelScreen extends StatelessWidget {
         return 'Audit user and admin actions for accountability and support troubleshooting.';
       case 'Admin Users':
         return 'Define admin roles and permissions for support, billing, and content operations.';
+      case 'Ads':
+        return 'Manage sponsored product offers shown on the app home screen.';
       case 'Settings':
         return 'Platform-level branding, safeguards, and operational defaults.';
       default:
@@ -375,6 +378,8 @@ class _AdminHouseholdsPageState extends State<AdminHouseholdsPage> {
     } catch (_) {
       usingFallback = true;
     }
+
+    _AdminSessionStore.syncHouseholds(rows);
 
     if (!mounted) return;
     setState(() {
@@ -959,6 +964,8 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     } catch (_) {
       usingFallback = true;
     }
+
+    _AdminSessionStore.syncHouseholds(households);
 
     if (!mounted) return;
     setState(() {
@@ -2520,6 +2527,152 @@ class AdminUsersManagementPage extends StatelessWidget {
   }
 }
 
+class AdminAdsPage extends StatelessWidget {
+  const AdminAdsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<AdOfferRow>>(
+      future: const AdminRepository().fetchAdOfferRows(),
+      builder: (context, snapshot) {
+        final offers = snapshot.data ?? AdminMockData.adOfferRows;
+        final usingFallback =
+            snapshot.connectionState == ConnectionState.done && snapshot.data == null;
+        return AdminContentSection(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AdminPageHeader(
+                title: 'Ad offers',
+                subtitle: usingFallback
+                    ? 'Sponsored product offers (fallback data). Run docs/supabase-ads.sql to enable live data.'
+                    : 'Sponsored product offers shown on the app home screen. Managed via the admin panel.',
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  _AdStatChip(
+                    label: 'Total offers',
+                    value: '${offers.length}',
+                    icon: Icons.campaign_outlined,
+                  ),
+                  const SizedBox(width: 12),
+                  _AdStatChip(
+                    label: 'Active',
+                    value: '${offers.where((o) => o.isActive).length}',
+                    icon: Icons.check_circle_outline,
+                  ),
+                  const SizedBox(width: 12),
+                  _AdStatChip(
+                    label: 'Advertisers',
+                    value: offers.map((o) => o.advertiser).toSet().length.toString(),
+                    icon: Icons.store_outlined,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TableCard(
+                title: usingFallback ? 'Ad offers (fallback data)' : 'Ad offers',
+                columns: const [
+                  'Advertiser',
+                  'Product',
+                  'Category',
+                  'Old price',
+                  'New price',
+                  'Discount',
+                  'Placement',
+                  'Order',
+                  'Status',
+                  'Expires',
+                  'Created',
+                ],
+                rows: offers
+                    .map(
+                      (offer) => [
+                        Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: _hexColor(offer.accentHex),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(offer.advertiser,
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                        Text(offer.productName),
+                        Text(offer.category),
+                        Text(offer.formattedOldPrice,
+                            style: const TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                                color: AppColors.textSecondary)),
+                        Text(offer.formattedNewPrice,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        StatusPill(label: '${offer.discountPercent}% off'),
+                        Text(offer.placement),
+                        Text('${offer.displayOrder}'),
+                        StatusPill(label: offer.isActive ? 'Active' : 'Inactive'),
+                        Text(offer.expiresAt ?? '—'),
+                        Text(offer.createdAt),
+                      ],
+                    )
+                    .toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static Color _hexColor(String hex) {
+    final cleaned = hex.replaceAll('#', '');
+    final value = int.tryParse('FF$cleaned', radix: 16) ?? 0xFF1B8A4A;
+    return Color(value);
+  }
+}
+
+class _AdStatChip extends StatelessWidget {
+  const _AdStatChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminCard(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: AppColors.primaryTeal),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700)),
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class AdminSettingsPage extends StatelessWidget {
   const AdminSettingsPage({super.key});
 
@@ -2681,7 +2834,11 @@ class _PresetDraft {
 
 class _AdminSessionStore {
   static final List<HouseholdRow> _householdOverrides = <HouseholdRow>[];
+  static List<HouseholdRow>? _householdSnapshot;
   static List<PresetCategory>? _presetSnapshot;
+
+  static List<HouseholdRow> get _baseHouseholds =>
+      _householdSnapshot ?? AdminMockData.householdRows;
 
   static List<HouseholdRow> mergeHouseholds(List<HouseholdRow> base) {
     final merged = List<HouseholdRow>.from(base);
@@ -2700,8 +2857,12 @@ class _AdminSessionStore {
     return merged;
   }
 
+  static void syncHouseholds(List<HouseholdRow> households) {
+    _householdSnapshot = List<HouseholdRow>.from(households);
+  }
+
   static HouseholdRow? householdByIdentifier(String identifier) {
-    for (final row in mergeHouseholds(AdminMockData.householdRows)) {
+    for (final row in mergeHouseholds(_baseHouseholds)) {
       if (row.householdId == identifier ||
           row.name == identifier ||
           _slugify(row.name) == _slugify(identifier)) {
@@ -3270,8 +3431,11 @@ class _HouseholdLinkButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final identifier = row.householdId.trim().isNotEmpty
+        ? row.householdId
+        : _slugify(row.name);
     return TextButton(
-      onPressed: () => context.go('/admin/households/${_slugify(row.name)}'),
+      onPressed: () => context.go('/admin/households/$identifier'),
       child: const Text('Open household'),
     );
   }
@@ -3420,12 +3584,8 @@ class _HouseholdDetailItemCard extends StatelessWidget {
 }
 
 AdminHouseholdDetailData _fallbackHouseholdDetail(String identifier) {
-  final householdRows =
-      _AdminSessionStore.mergeHouseholds(AdminMockData.householdRows);
-  final household = householdRows.firstWhere(
-    (row) => row.householdId == identifier || row.name == identifier || _slugify(row.name) == identifier,
-    orElse: () => AdminMockData.householdRows.first,
-  );
+  final household = _AdminSessionStore.householdByIdentifier(identifier) ??
+      _unavailableHousehold(identifier);
   final matchingUsers = AdminMockData.userRows
       .where((row) => row.household == household.name)
       .map(
@@ -3513,6 +3673,27 @@ AdminHouseholdDetailData _fallbackHouseholdDetail(String identifier) {
       ),
     ],
     activityLog: matchingActivity,
+  );
+}
+
+HouseholdRow _unavailableHousehold(String identifier) {
+  final label = identifier.trim().isEmpty ? 'Unknown household' : identifier;
+  return HouseholdRow(
+    householdId: identifier,
+    inviteCode: '',
+    name: 'Household unavailable',
+    location: 'Could not resolve $label from current admin data.',
+    ownerName: 'Unknown owner',
+    ownerEmail: 'No owner data available',
+    ownerPhone: '—',
+    plan: 'Unknown',
+    members: 0,
+    children: 0,
+    supplies: 0,
+    zones: 0,
+    status: 'Unavailable',
+    createdDate: '—',
+    usage: 0,
   );
 }
 

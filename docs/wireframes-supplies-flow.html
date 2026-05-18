@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>homeFlow – Supplies to Delivery Wireframes</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+    background: #E8EEF3;
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+  }
+  /* ── Print button (screen only) ── */
+  .print-btn {
+    display: block;
+    margin: 0 auto 32px;
+    padding: 10px 28px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.2px;
+  }
+  :root {
+    --primary:       #001D39;
+    --secondary:     #0A4174;
+    --ui-blue:       #49769F;
+    --surface-light: #F5F9FC;
+    --surface-muted: #EAF1F7;
+    --divider:       #A4C0D4;
+    --text-primary:  #001D39;
+    --text-secondary:#0A4174;
+    --text-hint:     #5F7D94;
+    --accent-orange: #F1715A;
+    --accent-yellow: #FBCE60;
+    --success:       #198754;
+    --warning-amber: #D4960A;
+    --card-bg:       #FFFFFF;
+    --mpesa-green:   #16A34A;
+    --enough-bg:     #C8DFF0;  --enough-text: #0A4174;
+    --low-bg:        #FFF8E1;  --low-text:    #B8860B;
+    --verylow-bg:    #FFEDE8;  --verylow-text:#D9442A;
+    --finished-bg:   #FCECEC;  --finished-text:#B71C1C;
+    --naivas:        #00704A;
+    --carrefour:     #004B9D;
+  }
+  h1 { text-align:center; font-size:22px; font-weight:700; color:var(--primary); margin-bottom:8px; letter-spacing:-0.3px; }
+  .page-subtitle { text-align:center; font-size:13px; color:var(--text-hint); margin-bottom:40px; }
+  .phase-label { font-size:11px; font-weight:700; letter-spacing:1px; color:var(--text-hint); text-transform:uppercase; margin-bottom:16px; margin-top:40px; padding-left:4px; }
+  .screen-row { display:flex; flex-wrap:wrap; gap:28px; justify-content:center; align-items:flex-start; margin-bottom:8px; }
+  .screen-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .screen-title { font-size:12px; font-weight:600; color:var(--secondary); letter-spacing:0.2px; text-align:center; }
+  .screen-num { display:inline-block; width:22px; height:22px; border-radius:50%; background:var(--primary); color:white; font-size:11px; font-weight:700; text-align:center; line-height:22px; margin-right:6px; }
+  .phone { width:320px; background:var(--surface-light); border-radius:40px; border:8px solid #1a1a1a; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.1); position:relative; display:flex; flex-direction:column; min-height:600px; }
+  .phone-notch { position:absolute; top:0; left:50%; transform:translateX(-50%); width:120px; height:30px; background:#1a1a1a; border-radius:0 0 18px 18px; z-index:10; }
+  .phone-status-bar { height:44px; background:var(--primary); display:flex; align-items:flex-end; justify-content:space-between; padding:0 20px 6px; flex-shrink:0; }
+  .status-time { font-size:12px; font-weight:600; color:white; }
+  .status-time.dark { color:var(--primary); }
+  .status-icons { display:flex; gap:5px; align-items:center; }
+  .status-icons span { font-size:11px; color:white; }
+  .status-icons span.dark { color:var(--primary); }
+  .app-bar { height:52px; background:var(--card-bg); border-bottom:1px solid var(--divider); display:flex; align-items:center; padding:0 16px; gap:10px; flex-shrink:0; }
+  .app-bar .back-btn { font-size:22px; color:var(--primary); flex-shrink:0; }
+  .app-bar .title { font-size:17px; font-weight:700; color:var(--primary); flex:1; }
+  .app-bar .action { font-size:13px; font-weight:600; color:var(--secondary); }
+  .app-bar .live-badge { font-size:10px; font-weight:700; color:white; background:#388E3C; border-radius:10px; padding:2px 7px; letter-spacing:0.6px; }
+  .dash-header { background:linear-gradient(135deg,var(--ui-blue),var(--primary)); padding:12px 16px 16px; flex-shrink:0; }
+  .dash-header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .household-name { font-size:17px; font-weight:700; color:white; }
+  .notif-btn { position:relative; width:36px; height:36px; display:flex; align-items:center; justify-content:center; }
+  .notif-badge { position:absolute; top:2px; right:2px; width:16px; height:16px; background:var(--accent-orange); border-radius:50%; border:1.5px solid white; font-size:8px; color:white; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .dash-user-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .avatar { width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,0.22); border:1.5px solid rgba(255,255,255,0.45); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:white; flex-shrink:0; }
+  .dash-user-info .greeting { font-size:17px; font-weight:700; color:white; }
+  .dash-user-info .meta-row { display:flex; align-items:center; gap:6px; margin-top:3px; }
+  .dash-user-info .hname { font-size:12px; color:rgba(255,255,255,0.7); }
+  .role-pill { font-size:9px; font-weight:700; background:rgba(255,255,255,0.22); color:white; border-radius:8px; padding:2px 6px; }
+  .plan-pill { font-size:9px; font-weight:700; background:var(--accent-yellow); color:var(--primary); border-radius:8px; padding:2px 6px; }
+  .header-pills { display:flex; gap:7px; overflow:hidden; }
+  .header-pill { display:flex; align-items:center; gap:5px; background:rgba(255,255,255,0.15); border-radius:20px; padding:4px 10px; font-size:11px; font-weight:500; color:white; white-space:nowrap; }
+  .header-pill.urgent { background:rgba(241,113,90,0.35); border:1px solid rgba(241,113,90,0.5); }
+  .body { flex:1; overflow-y:auto; padding:16px; background:var(--surface-light); display:flex; flex-direction:column; gap:16px; }
+  .body.no-pad { padding:0; gap:0; }
+  .card { background:var(--card-bg); border-radius:14px; border:1px solid var(--divider); padding:14px; }
+  .card-title { font-size:15px; font-weight:700; color:var(--primary); margin-bottom:4px; }
+  .card-sub { font-size:12px; color:var(--text-secondary); }
+  .alert-banner { background:#FFF4F2; border:1.5px solid rgba(241,113,90,0.45); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+  .alert-icon { width:34px; height:34px; border-radius:10px; background:rgba(241,113,90,0.15); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .alert-title { font-size:13px; font-weight:700; color:var(--accent-orange); }
+  .alert-body { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+  .alert-chevron { margin-left:auto; font-size:18px; color:var(--text-hint); }
+  .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .section-title { font-size:15px; font-weight:700; color:var(--primary); }
+  .section-action { font-size:12px; font-weight:600; color:var(--secondary); }
+  .quick-actions { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .qa-item { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .qa-icon { width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .qa-label { font-size:10px; font-weight:500; color:var(--text-secondary); text-align:center; line-height:1.3; }
+  .home-status { display:flex; gap:10px; }
+  .status-strip-card { flex:1; background:var(--card-bg); border:1px solid var(--divider); border-radius:12px; padding:10px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .strip-icon { font-size:18px; }
+  .strip-num { font-size:17px; font-weight:800; color:var(--primary); }
+  .strip-num.warn { color:var(--accent-orange); }
+  .strip-label { font-size:10px; color:var(--text-hint); text-align:center; }
+  .segment { height:44px; background:var(--surface-light); border-radius:12px; border:1px solid var(--divider); display:flex; padding:4px; gap:4px; }
+  .seg-btn { flex:1; border-radius:9px; border:none; background:transparent; display:flex; align-items:center; justify-content:center; gap:5px; font-size:13px; font-weight:600; cursor:pointer; }
+  .seg-btn.active { background:var(--primary); color:white; box-shadow:0 2px 6px rgba(0,29,57,0.25); }
+  .seg-btn.inactive { color:var(--text-secondary); }
+  .search-bar { background:var(--surface-light); border-radius:14px; height:40px; display:flex; align-items:center; padding:0 12px; gap:8px; color:var(--text-hint); font-size:13px; margin:10px 12px 0; }
+  .chip-row { display:flex; gap:8px; padding:8px 12px; overflow:hidden; flex-wrap:nowrap; }
+  .cat-chip { display:inline-flex; align-items:center; padding:5px 14px; border-radius:20px; border:1px solid var(--divider); background:var(--surface-light); font-size:12px; font-weight:500; color:var(--text-secondary); white-space:nowrap; cursor:pointer; }
+  .cat-chip.active { background:var(--primary); border-color:var(--primary); color:white; }
+  .chip { display:inline-flex; align-items:center; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; white-space:nowrap; }
+  .chip.enough    { background:var(--enough-bg);   color:var(--enough-text);   }
+  .chip.low       { background:var(--low-bg);      color:var(--low-text);      }
+  .chip.very-low  { background:var(--verylow-bg);  color:var(--verylow-text);  }
+  .chip.finished  { background:var(--finished-bg); color:var(--finished-text); }
+  .supply-card { background:var(--card-bg); border-radius:14px; border:1px solid var(--divider); padding:14px; margin:0 16px 10px; }
+  .supply-card.attention { border-color:rgba(241,113,90,0.35); }
+  .supply-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:12px; }
+  .supply-name { font-size:14px; font-weight:600; color:var(--primary); }
+  .supply-meta { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+  .supply-updated { font-size:11px; color:var(--text-hint); margin-top:8px; }
+  .update-chips { display:flex; gap:8px; margin-bottom:8px; flex-wrap:nowrap; overflow:hidden; }
+  .update-chip { padding:5px 12px; border-radius:20px; font-size:12px; font-weight:500; border:1px solid var(--divider); background:var(--surface-light); color:var(--text-secondary); white-space:nowrap; cursor:pointer; }
+  .update-chip.selected-enough   { background:var(--enough-bg);   border-color:var(--enough-bg);   color:var(--enough-text);   }
+  .update-chip.selected-low      { background:var(--low-bg);      border-color:var(--low-bg);      color:var(--low-text);      }
+  .update-chip.selected-verylow  { background:var(--verylow-bg);  border-color:var(--verylow-bg);  color:var(--verylow-text);  }
+  .update-chip.selected-finished { background:var(--finished-bg); border-color:var(--finished-bg); color:var(--finished-text); }
+  .log-link { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--primary); font-weight:500; margin-top:2px; }
+  .analytics-strip { margin:0 16px 0; padding:10px 14px; background:rgba(0,29,57,0.06); border-radius:10px; border:1px solid rgba(0,29,57,0.18); display:flex; align-items:center; gap:10px; }
+  .analytic-val { font-size:13px; font-weight:800; color:var(--primary); }
+  .analytic-val.warn { color:var(--accent-orange); }
+  .analytic-lbl { font-size:11px; color:var(--text-secondary); }
+  .bottom-nav { height:64px; background:var(--card-bg); border-top:1px solid var(--divider); display:flex; align-items:center; flex-shrink:0; box-shadow:0 -2px 12px rgba(0,0,0,0.06); }
+  .nav-item { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 0; }
+  .nav-icon { font-size:22px; color:var(--text-hint); }
+  .nav-icon.active { color:var(--primary); }
+  .nav-label { font-size:10px; color:var(--text-hint); font-weight:400; }
+  .nav-label.active { color:var(--primary); font-weight:600; }
+  .bottom-sheet { background:white; border-radius:20px 20px 0 0; padding:12px 20px 24px; }
+  .drag-handle { width:40px; height:4px; background:var(--divider); border-radius:2px; margin:0 auto 16px; }
+  .sheet-title { font-size:18px; font-weight:700; color:var(--primary); margin-bottom:4px; }
+  .sheet-sub { font-size:12px; color:var(--text-secondary); margin-bottom:14px; }
+  .totals-row { display:flex; gap:8px; margin-bottom:14px; }
+  .total-card { flex:1; background:var(--card-bg); border-radius:12px; border:1px solid var(--divider); padding:12px; }
+  .total-card.cheapest-bestmix { background:#E8F5E9; border-color:rgba(67,160,71,0.6); border-width:1.5px; }
+  .total-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+  .total-retailer { font-size:11px; font-weight:600; display:flex; align-items:center; margin-bottom:8px; }
+  .total-kes { font-size:16px; font-weight:800; color:var(--primary); margin-bottom:4px; }
+  .total-items { font-size:10px; color:var(--text-secondary); }
+  .cheapest-tag { display:inline-block; margin-top:4px; font-size:8px; font-weight:700; letter-spacing:0.5px; color:white; padding:2px 6px; border-radius:4px; }
+  .mode-row { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .mode-chip { display:flex; align-items:center; gap:5px; padding:5px 10px; border-radius:20px; border:1px solid var(--divider); background:white; font-size:12px; font-weight:400; color:var(--text-secondary); cursor:pointer; white-space:nowrap; }
+  .mode-chip.active-bestmix { background:rgba(46,125,50,0.12); border-color:rgba(46,125,50,0.6); border-width:1.5px; color:#2E7D32; font-weight:600; }
+  .savings-callout { background:#E8F5E9; border:1px solid rgba(67,160,71,0.35); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .savings-callout span { font-size:12px; font-weight:500; color:#1B5E20; }
+  .item-assign-card { background:var(--card-bg); border-radius:12px; border:1px solid var(--divider); padding:12px; margin-bottom:10px; }
+  .item-assign-name { font-size:13px; font-weight:600; color:var(--primary); }
+  .item-assign-qty  { font-size:11px; color:var(--text-secondary); }
+  .store-pill { display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px; font-size:12px; font-weight:600; margin-top:10px; width:fit-content; }
+  .store-pill.naivas    { background:#E8F5EE; border:1px solid rgba(0,112,74,0.3); color:var(--naivas); }
+  .store-pill.carrefour { background:#EEF2FB; border:1px solid rgba(0,75,157,0.3); color:var(--carrefour); }
+  .store-dot { width:7px; height:7px; border-radius:50%; }
+  .section-lbl { font-size:10px; font-weight:700; letter-spacing:0.8px; color:var(--text-hint); text-transform:uppercase; margin-bottom:8px; }
+  .proceed-bar { padding:10px 16px; background:var(--card-bg); border-top:1px solid var(--divider); display:flex; gap:10px; flex-shrink:0; box-shadow:0 -2px 8px rgba(0,0,0,0.06); }
+  .proceed-btn { flex:1; border-radius:10px; padding:10px 12px; text-align:center; cursor:pointer; border:none; }
+  .proceed-btn.naivas-btn    { background:var(--naivas); }
+  .proceed-btn.carrefour-btn { background:var(--carrefour); }
+  .proceed-label { font-size:12px; font-weight:500; color:rgba(255,255,255,0.85); }
+  .proceed-kes   { font-size:15px; font-weight:800; color:white; }
+  .proceed-arrow { font-size:10px; color:rgba(255,255,255,0.7); }
+  .info-card { background:var(--surface-light); border-radius:10px; padding:12px; margin-bottom:14px; }
+  .hname  { font-size:13px; font-weight:700; color:var(--primary); }
+  .howner { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+  .receipt-item { display:flex; align-items:flex-start; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--surface-light); }
+  .receipt-item:last-of-type { border-bottom:none; }
+  .receipt-item-name  { font-size:13px; font-weight:500; color:var(--primary); }
+  .receipt-item-size  { font-size:11px; color:var(--text-secondary); margin-top:1px; }
+  .receipt-item-price { font-size:13px; font-weight:600; color:var(--primary); }
+  .divider-line { height:1px; background:var(--divider); margin:6px 0; }
+  .receipt-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; }
+  .rlabel { font-size:13px; color:var(--text-secondary); }
+  .rval   { font-size:13px; font-weight:600; color:var(--primary); }
+  .rlabel.total { font-size:15px; font-weight:700; color:var(--primary); }
+  .rval.total   { font-size:15px; font-weight:800; color:var(--primary); }
+  .min-order-warning { background:#FFF3CD; border:1px solid rgba(212,150,10,0.4); border-radius:8px; padding:8px 12px; display:flex; align-items:center; gap:8px; margin:10px 0; }
+  .min-order-warning span { font-size:12px; font-weight:500; color:var(--warning-amber); }
+  .mpesa-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .mpesa-icon-box { width:42px; height:42px; border-radius:12px; background:rgba(22,163,74,0.12); display:flex; align-items:center; justify-content:center; font-size:22px; }
+  .mpesa-title { font-size:17px; font-weight:700; color:var(--primary); }
+  .mpesa-sub   { font-size:12px; color:var(--text-secondary); }
+  .mpesa-amount-row { background:var(--surface-light); border-radius:10px; padding:12px; text-align:center; margin-bottom:14px; }
+  .mpesa-amount { font-size:26px; font-weight:800; color:var(--primary); }
+  .mpesa-amount-label { font-size:11px; color:var(--text-hint); margin-top:2px; }
+  .mpesa-input-label { font-size:13px; font-weight:600; color:var(--primary); margin-bottom:6px; }
+  .mpesa-input { width:100%; height:48px; border-radius:12px; border:1.5px solid var(--divider); background:var(--surface-light); padding:0 14px; font-size:15px; color:var(--primary); display:flex; align-items:center; margin-bottom:6px; }
+  .mpesa-hint { font-size:11px; color:var(--text-hint); margin-bottom:14px; }
+  .mpesa-btn { width:100%; height:50px; border-radius:14px; background:var(--mpesa-green); border:none; display:flex; align-items:center; justify-content:center; gap:8px; color:white; font-size:15px; font-weight:700; cursor:pointer; }
+  .success-icon { width:72px; height:72px; border-radius:50%; background:rgba(22,163,74,0.12); display:flex; align-items:center; justify-content:center; font-size:38px; margin:20px auto 16px; }
+  .success-title { font-size:20px; font-weight:700; color:var(--primary); text-align:center; margin-bottom:8px; }
+  .success-body { font-size:13px; color:var(--text-secondary); text-align:center; line-height:1.55; margin-bottom:6px; padding:0 8px; }
+  .stk-steps { background:var(--surface-light); border-radius:12px; padding:12px 14px; margin:14px 0; display:flex; flex-direction:column; gap:8px; }
+  .stk-step { display:flex; align-items:flex-start; gap:10px; font-size:12px; color:var(--text-secondary); }
+  .stk-step-num { width:20px; height:20px; border-radius:50%; background:var(--mpesa-green); color:white; font-weight:700; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .done-btn { width:100%; height:50px; border-radius:14px; background:var(--primary); border:none; display:flex; align-items:center; justify-content:center; color:white; font-size:15px; font-weight:700; }
+  .outline-btn { width:100%; height:44px; border-radius:14px; border:1.5px solid var(--divider); background:white; display:flex; align-items:center; justify-content:center; color:var(--primary); font-size:14px; font-weight:600; margin-top:10px; }
+  .tracking-header { background:linear-gradient(135deg,var(--ui-blue),var(--primary)); padding:16px 20px 20px; flex-shrink:0; }
+  .track-label { font-size:12px; color:rgba(255,255,255,0.7); font-weight:500; }
+  .track-id { font-size:15px; font-weight:700; color:white; margin-top:4px; }
+  .order-status-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; background:rgba(22,163,74,0.22); border:1px solid rgba(22,163,74,0.4); color:white; font-size:11px; font-weight:600; margin-top:10px; }
+  .step-row { display:flex; align-items:flex-start; gap:12px; padding:12px 0; }
+  .step-row+.step-row { border-top:1px solid var(--surface-light); }
+  .step-dot-col { display:flex; flex-direction:column; align-items:center; flex-shrink:0; width:24px; }
+  .step-dot { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; }
+  .step-dot.done    { background:var(--mpesa-green); color:white; }
+  .step-dot.pending { background:var(--surface-muted); color:var(--text-hint); }
+  .step-dot.active  { background:var(--accent-yellow); color:var(--primary); }
+  .step-line { width:2px; flex:1; background:var(--divider); min-height:20px; }
+  .step-title { font-size:13px; font-weight:600; color:var(--primary); }
+  .step-sub   { font-size:11px; color:var(--text-hint); margin-top:2px; }
+  .tag { display:inline-flex; align-items:center; padding:2px 7px; border-radius:6px; font-size:10px; font-weight:700; letter-spacing:0.4px; }
+  .tag.owner   { background:rgba(0,29,57,0.1); color:var(--primary); }
+  .tag.pending { background:rgba(241,113,90,0.12); color:var(--accent-orange); }
+  .legend { background:white; border-radius:16px; border:1px solid var(--divider); padding:20px 24px; max-width:760px; margin:40px auto 0; }
+  .legend h2 { font-size:14px; font-weight:700; color:var(--primary); margin-bottom:14px; text-transform:uppercase; letter-spacing:0.8px; }
+  .legend table { width:100%; border-collapse:collapse; font-size:12px; }
+  .legend th { text-align:left; font-weight:700; color:var(--text-hint); padding:4px 8px 8px; border-bottom:1px solid var(--divider); }
+  .legend td { padding:6px 8px; color:var(--text-secondary); border-bottom:1px solid var(--surface-light); vertical-align:top; }
+  .legend td:first-child { font-weight:600; color:var(--primary); white-space:nowrap; }
+  .spacer { height:8px; }
+  @media(max-width:700px){ .screen-row{ gap:20px; } .phone{ width:290px; } }
+
+  /* ════════════════════════════════════════
+     PRINT STYLES  –  fits 3 phones per A4 row
+     ════════════════════════════════════════ */
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 10mm 8mm;
+    }
+
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    html, body {
+      background: white !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      min-height: unset;
+    }
+
+    .print-btn { display: none !important; }
+
+    h1 { font-size: 16px !important; margin-bottom: 4px !important; }
+    .page-subtitle { font-size: 10px !important; margin-bottom: 16px !important; }
+    .phase-label  { font-size: 9px !important; margin-top: 14px !important; margin-bottom: 8px !important; }
+
+    /* Each phase row = one landscape A4 page */
+    .screen-row {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      justify-content: center !important;
+      gap: 10px !important;
+      margin-bottom: 0 !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    /* Force a page break before each new phase */
+    .phase-label + .screen-row { page-break-before: always; break-before: page; }
+    /* Title + subtitle keep the first phase row on page 1 without orphan */
+    h1 + .page-subtitle + .phase-label + .screen-row { page-break-before: avoid; break-before: avoid; }
+
+    .screen-wrap { gap: 5px !important; }
+    .screen-title { font-size: 9px !important; }
+    .screen-num { width: 16px !important; height: 16px !important; font-size: 8px !important; line-height: 16px !important; margin-right: 3px !important; }
+
+    /* Scale phones to fit 3 across A4 landscape (277mm wide ÷ 3 ≈ 82mm = ~230px at 96dpi) */
+    .phone {
+      width: 195px !important;
+      min-height: unset !important;
+      border-width: 5px !important;
+      border-radius: 26px !important;
+      box-shadow: none !important;
+      font-size: 9px !important;
+    }
+
+    /* Tighten internal spacing */
+    .phone-notch { width: 72px !important; height: 18px !important; }
+    .phone-status-bar { height: 28px !important; padding: 0 12px 4px !important; }
+    .status-time, .status-icons span { font-size: 8px !important; }
+    .app-bar { height: 34px !important; padding: 0 10px !important; }
+    .app-bar .title { font-size: 11px !important; }
+    .app-bar .back-btn { font-size: 14px !important; }
+    .app-bar .action { font-size: 8px !important; }
+    .app-bar .live-badge { font-size: 7px !important; padding: 1px 5px !important; }
+    .dash-header { padding: 8px 10px 10px !important; }
+    .household-name { font-size: 11px !important; }
+    .avatar { width: 30px !important; height: 30px !important; font-size: 12px !important; }
+    .dash-user-info .greeting { font-size: 11px !important; }
+    .dash-user-info .hname, .role-pill, .plan-pill { font-size: 7px !important; }
+    .header-pill { font-size: 8px !important; padding: 3px 7px !important; }
+    .body { padding: 10px !important; gap: 10px !important; }
+    .card { padding: 9px !important; border-radius: 10px !important; }
+    .card-title { font-size: 10px !important; margin-bottom: 2px !important; }
+    .card-sub { font-size: 8px !important; }
+    .alert-banner { padding: 8px 10px !important; gap: 8px !important; }
+    .alert-icon { width: 24px !important; height: 24px !important; font-size: 13px !important; }
+    .alert-title { font-size: 9px !important; }
+    .alert-body { font-size: 8px !important; }
+    .section-title { font-size: 10px !important; }
+    .qa-icon { width: 34px !important; height: 34px !important; font-size: 14px !important; border-radius: 10px !important; }
+    .qa-label { font-size: 7px !important; }
+    .strip-num { font-size: 12px !important; }
+    .strip-label { font-size: 8px !important; }
+    .segment { height: 30px !important; border-radius: 8px !important; padding: 3px !important; }
+    .seg-btn { font-size: 9px !important; border-radius: 6px !important; }
+    .search-bar { height: 28px !important; font-size: 9px !important; margin: 6px 8px 0 !important; border-radius: 10px !important; }
+    .chip-row { padding: 5px 8px !important; gap: 5px !important; }
+    .cat-chip { font-size: 8px !important; padding: 3px 9px !important; }
+    .chip { font-size: 8px !important; padding: 3px 7px !important; }
+    .supply-card { margin: 0 10px 7px !important; padding: 10px !important; border-radius: 10px !important; }
+    .supply-name { font-size: 10px !important; }
+    .supply-meta, .supply-updated { font-size: 8px !important; }
+    .update-chip { font-size: 8px !important; padding: 3px 8px !important; }
+    .log-link { font-size: 8px !important; }
+    .analytics-strip { margin: 0 10px !important; padding: 7px 10px !important; }
+    .analytic-val { font-size: 9px !important; }
+    .analytic-lbl { font-size: 8px !important; }
+    .bottom-nav { height: 44px !important; }
+    .nav-icon { font-size: 15px !important; }
+    .nav-label { font-size: 7px !important; }
+    .bottom-sheet { padding: 8px 14px 16px !important; border-radius: 14px 14px 0 0 !important; }
+    .sheet-title { font-size: 13px !important; }
+    .sheet-sub { font-size: 9px !important; margin-bottom: 9px !important; }
+    .drag-handle { margin-bottom: 10px !important; }
+    .totals-row { gap: 5px !important; margin-bottom: 9px !important; }
+    .total-card { padding: 8px !important; border-radius: 8px !important; }
+    .total-retailer { font-size: 8px !important; margin-bottom: 5px !important; }
+    .total-kes { font-size: 11px !important; }
+    .total-items { font-size: 7px !important; }
+    .cheapest-tag { font-size: 6px !important; }
+    .mode-chip { font-size: 8px !important; padding: 3px 7px !important; }
+    .savings-callout { padding: 7px 10px !important; border-radius: 7px !important; margin-bottom: 9px !important; }
+    .savings-callout span { font-size: 8px !important; }
+    .item-assign-card { padding: 9px !important; margin-bottom: 7px !important; border-radius: 8px !important; }
+    .item-assign-name { font-size: 9px !important; }
+    .item-assign-qty  { font-size: 8px !important; }
+    .store-pill { font-size: 8px !important; padding: 4px 7px !important; }
+    .proceed-bar { padding: 7px 10px !important; }
+    .proceed-btn { border-radius: 7px !important; padding: 7px 8px !important; }
+    .proceed-label { font-size: 8px !important; }
+    .proceed-kes   { font-size: 11px !important; }
+    .info-card { padding: 8px !important; margin-bottom: 9px !important; }
+    .hname  { font-size: 9px !important; }
+    .howner { font-size: 8px !important; }
+    .receipt-item-name { font-size: 9px !important; }
+    .receipt-item-size { font-size: 8px !important; }
+    .receipt-item-price { font-size: 9px !important; }
+    .rlabel, .rval { font-size: 9px !important; }
+    .rlabel.total, .rval.total { font-size: 10px !important; }
+    .min-order-warning { padding: 6px 8px !important; }
+    .min-order-warning span { font-size: 8px !important; }
+    .mpesa-icon-box { width: 30px !important; height: 30px !important; font-size: 15px !important; border-radius: 8px !important; }
+    .mpesa-title { font-size: 12px !important; }
+    .mpesa-sub   { font-size: 8px !important; }
+    .mpesa-amount { font-size: 18px !important; }
+    .mpesa-amount-label { font-size: 8px !important; }
+    .mpesa-input { height: 34px !important; font-size: 11px !important; border-radius: 8px !important; }
+    .mpesa-hint { font-size: 8px !important; }
+    .mpesa-btn { height: 36px !important; font-size: 11px !important; border-radius: 10px !important; }
+    .success-icon { width: 50px !important; height: 50px !important; font-size: 26px !important; margin: 12px auto 10px !important; }
+    .success-title { font-size: 14px !important; }
+    .success-body { font-size: 9px !important; }
+    .stk-steps { padding: 8px 10px !important; gap: 6px !important; }
+    .stk-step { font-size: 8px !important; }
+    .stk-step-num { width: 15px !important; height: 15px !important; font-size: 8px !important; }
+    .done-btn, .outline-btn { height: 36px !important; font-size: 11px !important; border-radius: 10px !important; }
+    .tracking-header { padding: 10px 14px 14px !important; }
+    .track-label { font-size: 8px !important; }
+    .track-id { font-size: 10px !important; }
+    .order-status-chip { font-size: 8px !important; padding: 3px 7px !important; }
+    .step-title { font-size: 9px !important; }
+    .step-sub   { font-size: 8px !important; }
+    .step-dot { width: 16px !important; height: 16px !important; font-size: 9px !important; }
+    .legend { max-width: 100% !important; margin-top: 16px !important; padding: 14px 18px !important; }
+    .legend h2 { font-size: 10px !important; margin-bottom: 8px !important; }
+    .legend table { font-size: 9px !important; }
+    .legend td, .legend th { padding: 4px 6px !important; }
+  }
+</style>
+</head>
+<body>
+
+<h1>homeFlow — Supplies to Delivery</h1>
+<p class="page-subtitle">Wireframes matching the app's exact design language · 9 screens · 3 phases</p>
+<button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+
+<!-- ═══════════ PHASE 1 ═══════════ -->
+<p class="phase-label">Phase 1 — Dashboard Alert &amp; Supplies</p>
+<div class="screen-row">
+
+  <!-- Screen 1: Dashboard -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">1</span>Dashboard Home</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar"><span class="status-time">9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+      <div class="dash-header">
+        <div class="dash-header-top">
+          <span class="household-name">Kimani Home</span>
+          <div class="notif-btn"><span style="font-size:20px;color:white;">🔔</span><div class="notif-badge">3</div></div>
+        </div>
+        <div class="dash-user-row">
+          <div class="avatar">J</div>
+          <div class="dash-user-info">
+            <div class="greeting">Good morning, Jane 👋</div>
+            <div class="meta-row"><span class="hname">🏠 Kimani Home</span><span class="role-pill">Owner</span><span class="plan-pill">HOME PRO</span></div>
+          </div>
+        </div>
+        <div class="header-pills">
+          <div class="header-pill urgent">📦 4 low stock</div>
+          <div class="header-pill">🍽 2 meals today</div>
+          <div class="header-pill urgent">🛒 2 pending</div>
+        </div>
+      </div>
+      <div class="body" style="gap:14px;padding:14px;">
+        <div class="alert-banner">
+          <div class="alert-icon">⚠️</div>
+          <div><div class="alert-title">4 supplies need attention</div><div class="alert-body">2 pending shopping requests</div></div>
+          <div class="alert-chevron">›</div>
+        </div>
+        <div>
+          <div class="section-header"><span class="section-title">Quick Actions</span></div>
+          <div class="quick-actions">
+            <div class="qa-item"><div class="qa-icon" style="background:#EDF4FA;">📦</div><span class="qa-label">Supplies</span></div>
+            <div class="qa-item"><div class="qa-icon" style="background:#FFF4F2;">🛒</div><span class="qa-label">Shopping</span></div>
+            <div class="qa-item"><div class="qa-icon" style="background:#F0FDF4;">👕</div><span class="qa-label">Laundry</span></div>
+            <div class="qa-item"><div class="qa-icon" style="background:#FFF8E1;">🍽</div><span class="qa-label">Meals</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-header"><span class="section-title">Home Status</span></div>
+          <div class="home-status">
+            <div class="status-strip-card"><span class="strip-icon">📦</span><span class="strip-num warn">4</span><span class="strip-label">Low stock</span></div>
+            <div class="status-strip-card"><span class="strip-icon">👕</span><span class="strip-num">1</span><span class="strip-label">Active laundry</span></div>
+            <div class="status-strip-card"><span class="strip-icon">⚡</span><span class="strip-num">3</span><span class="strip-label">Utilities</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><span class="nav-icon active">🏠</span><span class="nav-label active">Home</span></div>
+        <div class="nav-item"><span class="nav-icon">📦</span><span class="nav-label">Supplies</span></div>
+        <div class="nav-item"><span class="nav-icon">🛒</span><span class="nav-label">Shopping</span></div>
+        <div class="nav-item"><span class="nav-icon">👕</span><span class="nav-label">Laundry</span></div>
+        <div class="nav-item"><span class="nav-icon">🍽</span><span class="nav-label">Meals</span></div>
+        <div class="nav-item"><span class="nav-icon">👧</span><span class="nav-label">Kids</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Supplies -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">2</span>Supplies Screen</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar" style="background:white;"><span class="status-time dark">9:41</span><div class="status-icons"><span class="dark">●●●</span><span class="dark">🔋</span></div></div>
+      <div class="app-bar"><span class="title">Supplies</span></div>
+      <div style="background:white;padding:10px 16px;border-bottom:1px solid var(--divider);">
+        <div class="segment">
+          <button class="seg-btn active">📦 Supplies</button>
+          <button class="seg-btn inactive">🔥 Utilities</button>
+        </div>
+      </div>
+      <div style="background:white;padding-bottom:4px;border-bottom:1px solid var(--divider);">
+        <div class="search-bar">🔍 Search supplies and utilities…</div>
+        <div class="chip-row">
+          <span class="cat-chip active">All</span>
+          <span class="cat-chip">Cleaning</span>
+          <span class="cat-chip">Food</span>
+          <span class="cat-chip">Toiletries</span>
+        </div>
+      </div>
+      <div class="body no-pad" style="overflow-y:auto;">
+        <div style="padding:12px 16px 0;">
+          <div class="analytics-strip">
+            <span style="font-size:14px;">📊</span>
+            <span class="analytic-val">14</span><span class="analytic-lbl">tracked</span>
+            <div style="width:1px;height:14px;background:var(--divider);margin:0 4px;"></div>
+            <span class="analytic-val warn">4</span><span class="analytic-lbl">need action</span>
+            <div style="width:1px;height:14px;background:var(--divider);margin:0 4px;"></div>
+            <span class="analytic-val warn">2</span><span class="analytic-lbl">finished</span>
+            <span style="margin-left:auto;font-size:16px;color:var(--text-hint);">›</span>
+          </div>
+        </div>
+        <div style="height:12px;"></div>
+        <div class="supply-card attention">
+          <div class="supply-card-top">
+            <div><div class="supply-name">Cooking Oil</div><div class="supply-meta">Food · Litres</div></div>
+            <span class="chip finished">Finished</span>
+          </div>
+          <div class="update-chips">
+            <span class="update-chip">Enough</span>
+            <span class="update-chip">Running Low</span>
+            <span class="update-chip">Very Low</span>
+            <span class="update-chip selected-finished">Finished</span>
+          </div>
+          <div class="supply-updated">By Jane · Updated 2h ago</div>
+          <div class="log-link" style="margin-top:6px;">✏️ Log amount used</div>
+        </div>
+        <div class="supply-card attention">
+          <div class="supply-card-top">
+            <div><div class="supply-name">Washing Powder</div><div class="supply-meta">Cleaning · Kg</div></div>
+            <span class="chip very-low">Very Low</span>
+          </div>
+          <div class="update-chips">
+            <span class="update-chip">Enough</span>
+            <span class="update-chip">Running Low</span>
+            <span class="update-chip selected-verylow">Very Low</span>
+            <span class="update-chip">Finished</span>
+          </div>
+          <div class="supply-updated">By Mary · Updated yesterday</div>
+        </div>
+        <div class="supply-card">
+          <div class="supply-card-top">
+            <div><div class="supply-name">Sugar</div><div class="supply-meta">Food · Kg</div></div>
+            <span class="chip low">Running Low</span>
+          </div>
+          <div class="update-chips">
+            <span class="update-chip">Enough</span>
+            <span class="update-chip selected-low">Running Low</span>
+            <span class="update-chip">Very Low</span>
+            <span class="update-chip">Finished</span>
+          </div>
+          <div class="supply-updated">By Jane · Updated 1d ago</div>
+        </div>
+        <div class="supply-card">
+          <div class="supply-card-top">
+            <div><div class="supply-name">Toilet Paper</div><div class="supply-meta">Toiletries · Rolls</div></div>
+            <span class="chip enough">Enough</span>
+          </div>
+          <div class="update-chips">
+            <span class="update-chip selected-enough">Enough</span>
+            <span class="update-chip">Running Low</span>
+            <span class="update-chip">Very Low</span>
+            <span class="update-chip">Finished</span>
+          </div>
+          <div class="supply-updated">By Mary · Updated 3d ago</div>
+        </div>
+        <div style="height:80px;"></div>
+      </div>
+      <div style="position:relative;">
+        <div style="position:absolute;right:16px;bottom:74px;background:var(--primary);color:white;border-radius:28px;padding:12px 18px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,29,57,0.35);z-index:5;">➕ Add Supply</div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><span class="nav-icon">🏠</span><span class="nav-label">Home</span></div>
+        <div class="nav-item"><span class="nav-icon active">📦</span><span class="nav-label active">Supplies</span></div>
+        <div class="nav-item"><span class="nav-icon">🛒</span><span class="nav-label">Shopping</span></div>
+        <div class="nav-item"><span class="nav-icon">👕</span><span class="nav-label">Laundry</span></div>
+        <div class="nav-item"><span class="nav-icon">🍽</span><span class="nav-label">Meals</span></div>
+        <div class="nav-item"><span class="nav-icon">👧</span><span class="nav-label">Kids</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 3: Add to Shopping Sheet -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">3</span>Add to Shopping (Sheet)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar" style="background:white;"><span class="status-time dark">9:41</span><div class="status-icons"><span class="dark">●●●</span><span class="dark">🔋</span></div></div>
+      <div class="app-bar"><span class="title">Supplies</span></div>
+      <div style="background:rgba(0,0,0,0.38);flex:1;display:flex;flex-direction:column;justify-content:flex-end;">
+        <div class="bottom-sheet">
+          <div class="drag-handle"></div>
+          <div class="sheet-title">Add to shopping list?</div>
+          <div class="sheet-sub">Cooking Oil is marked Finished</div>
+          <div style="background:var(--surface-light);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+            <div><div style="font-size:14px;font-weight:600;color:var(--primary);">Cooking Oil</div><div style="font-size:11px;color:var(--text-secondary);">Food · Litres</div></div>
+            <span class="chip finished">Finished</span>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:6px;">Quantity needed</div>
+            <div style="height:46px;border-radius:12px;border:1.5px solid var(--divider);background:var(--surface-light);display:flex;align-items:center;padding:0 12px;gap:8px;">
+              <span style="font-size:14px;color:var(--primary);flex:1;">2 Litres</span>
+              <span style="font-size:11px;color:var(--text-hint);">Litres</span>
+            </div>
+          </div>
+          <div style="margin-bottom:16px;">
+            <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:6px;">Note (optional)</div>
+            <div style="height:46px;border-radius:12px;border:1.5px solid var(--divider);background:var(--surface-light);display:flex;align-items:center;padding:0 12px;">
+              <span style="font-size:13px;color:var(--text-hint);">e.g. Rina brand preferred…</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button style="flex:1;height:46px;border-radius:12px;border:1.5px solid var(--divider);background:white;font-size:13px;font-weight:600;color:var(--primary);">Skip</button>
+            <button style="flex:2;height:46px;border-radius:12px;background:var(--primary);border:none;font-size:13px;font-weight:700;color:white;">Add to List</button>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><span class="nav-icon">🏠</span><span class="nav-label">Home</span></div>
+        <div class="nav-item"><span class="nav-icon active">📦</span><span class="nav-label active">Supplies</span></div>
+        <div class="nav-item"><span class="nav-icon">🛒</span><span class="nav-label">Shopping</span></div>
+        <div class="nav-item"><span class="nav-icon">👕</span><span class="nav-label">Laundry</span></div>
+        <div class="nav-item"><span class="nav-icon">🍽</span><span class="nav-label">Meals</span></div>
+        <div class="nav-item"><span class="nav-icon">👧</span><span class="nav-label">Kids</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ PHASE 2 ═══════════ -->
+<p class="phase-label">Phase 2 — Basket &amp; Price Compare</p>
+<div class="screen-row">
+
+  <!-- Screen 4: Shopping Screen -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">4</span>Shopping Screen</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar" style="background:white;"><span class="status-time dark">9:41</span><div class="status-icons"><span class="dark">●●●</span><span class="dark">🔋</span></div></div>
+      <div class="app-bar"><span class="title">Shopping</span><span class="action">Compare →</span></div>
+      <div class="body no-pad" style="overflow-y:auto;padding:16px;">
+        <div class="section-header"><span class="section-title">Pending Requests</span><span class="section-action">3 items</span></div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+          <div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+            <div><div class="card-title" style="font-size:14px;">Cooking Oil</div><div class="card-sub">2 Litres · Requested by Mary</div><div style="font-size:11px;color:var(--text-hint);margin-top:3px;">2h ago</div></div>
+            <span class="tag pending">Pending</span>
+          </div>
+          <div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+            <div><div class="card-title" style="font-size:14px;">Washing Powder</div><div class="card-sub">1 Kg · Requested by Mary</div><div style="font-size:11px;color:var(--text-hint);margin-top:3px;">Yesterday</div></div>
+            <span class="tag pending">Pending</span>
+          </div>
+          <div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+            <div><div class="card-title" style="font-size:14px;">Sugar 2 Kg</div><div class="card-sub">Owner buy · In basket</div></div>
+            <span class="tag owner">Owner</span>
+          </div>
+        </div>
+        <div class="section-header"><span class="section-title">Finished Supplies</span><span class="section-action">1 item</span></div>
+        <div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div class="card-title" style="font-size:14px;">Toothpaste</div><div class="card-sub">Toiletries · Finished</div></div>
+          <span class="chip finished">Finished</span>
+        </div>
+        <div style="height:80px;"></div>
+      </div>
+      <div style="position:relative;">
+        <div style="position:absolute;right:16px;bottom:74px;background:var(--primary);color:white;border-radius:28px;padding:12px 18px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,29,57,0.35);z-index:5;">⚖️ Compare Prices</div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><span class="nav-icon">🏠</span><span class="nav-label">Home</span></div>
+        <div class="nav-item"><span class="nav-icon">📦</span><span class="nav-label">Supplies</span></div>
+        <div class="nav-item"><span class="nav-icon active">🛒</span><span class="nav-label active">Shopping</span></div>
+        <div class="nav-item"><span class="nav-icon">👕</span><span class="nav-label">Laundry</span></div>
+        <div class="nav-item"><span class="nav-icon">🍽</span><span class="nav-label">Meals</span></div>
+        <div class="nav-item"><span class="nav-icon">👧</span><span class="nav-label">Kids</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 5: Basket Compare -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">5</span>Basket Compare</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar" style="background:white;"><span class="status-time dark">9:41</span><div class="status-icons"><span class="dark">●●●</span><span class="dark">🔋</span></div></div>
+      <div class="app-bar">
+        <span class="back-btn">‹</span>
+        <span class="title">Basket Compare</span>
+        <span class="live-badge">LIVE</span>
+        <span style="margin-left:6px;font-size:18px;color:var(--text-hint);">☁️</span>
+      </div>
+      <div class="body" style="overflow-y:auto;">
+        <div class="totals-row">
+          <div class="total-card">
+            <div class="total-retailer" style="color:var(--carrefour);"><span class="total-dot" style="background:var(--carrefour);"></span>Carrefour</div>
+            <div class="total-kes" style="color:var(--carrefour);">KES 1,840</div>
+            <div class="total-items">4/4 items</div>
+          </div>
+          <div class="total-card cheapest-bestmix">
+            <div class="total-retailer" style="color:#2E7D32;">✨ Best Mix</div>
+            <div class="total-kes" style="color:#2E7D32;">KES 1,560</div>
+            <div class="total-items">Best per item</div>
+            <div class="cheapest-tag" style="background:#2E7D32;">CHEAPEST</div>
+          </div>
+          <div class="total-card">
+            <div class="total-retailer" style="color:var(--naivas);"><span class="total-dot" style="background:var(--naivas);"></span>Naivas</div>
+            <div class="total-kes" style="color:var(--naivas);">KES 1,720</div>
+            <div class="total-items">4/4 items</div>
+          </div>
+        </div>
+        <div class="savings-callout">
+          <span style="font-size:18px;">💰</span>
+          <span>Buy from best store per item and <strong>save KES 160</strong> on this basket</span>
+        </div>
+        <div class="mode-row">
+          <span class="mode-chip active-bestmix">✨ Best Mix</span>
+          <span class="mode-chip">● Carrefour only</span>
+          <span class="mode-chip">● Naivas only</span>
+        </div>
+        <div class="section-lbl">SHOPPING LIST (3)</div>
+        <div class="item-assign-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="item-assign-name">Cooking Oil</div><div class="item-assign-qty">2 Litres</div><div style="display:flex;align-items:center;gap:3px;margin-top:3px;"><span style="font-size:10px;color:var(--primary);">📦</span><span style="font-size:11px;color:var(--primary);font-weight:500;">Fortune 2L</span></div></div>
+            <span style="font-size:16px;color:var(--text-hint);">⚙️</span>
+          </div>
+          <div class="store-pill naivas"><span class="store-dot" style="background:var(--naivas);"></span>Naivas · KES 289 <span style="margin-left:4px;font-size:9px;font-weight:800;color:#388E3C;">LIVE</span></div>
+        </div>
+        <div class="item-assign-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="item-assign-name">Washing Powder</div><div class="item-assign-qty">1 Kg</div></div>
+            <span style="font-size:16px;color:var(--text-hint);">⚙️</span>
+          </div>
+          <div class="store-pill carrefour"><span class="store-dot" style="background:var(--carrefour);"></span>Carrefour · KES 185</div>
+        </div>
+        <div class="item-assign-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="item-assign-name">Sugar</div><div class="item-assign-qty">2 Kg</div></div>
+            <span style="font-size:16px;color:var(--text-hint);">⚙️</span>
+          </div>
+          <div class="store-pill naivas"><span class="store-dot" style="background:var(--naivas);"></span>Naivas · KES 220</div>
+        </div>
+        <div style="height:8px;"></div>
+      </div>
+      <div class="proceed-bar">
+        <div class="proceed-btn naivas-btn">
+          <div class="proceed-label">Naivas</div>
+          <div class="proceed-kes">KES 1,720</div>
+          <div class="proceed-arrow">Proceed →</div>
+        </div>
+        <div class="proceed-btn carrefour-btn">
+          <div class="proceed-label">Carrefour</div>
+          <div class="proceed-kes">KES 1,840</div>
+          <div class="proceed-arrow">Proceed →</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 6: Receipt Sheet -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">6</span>Order Receipt (Sheet)</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar" style="background:white;"><span class="status-time dark">9:41</span><div class="status-icons"><span class="dark">●●●</span><span class="dark">🔋</span></div></div>
+      <div class="app-bar"><span class="back-btn">‹</span><span class="title">Basket Compare</span></div>
+      <div style="background:rgba(0,0,0,0.38);flex:1;display:flex;flex-direction:column;justify-content:flex-end;">
+        <div class="bottom-sheet" style="max-height:85%;overflow-y:auto;">
+          <div class="drag-handle"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:var(--naivas);display:inline-block;"></span>
+            <span class="sheet-title" style="margin-bottom:0;">Naivas basket</span>
+          </div>
+          <div class="sheet-sub">4 of 4 items matched</div>
+          <div class="info-card">
+            <div class="hname">Kimani Home</div>
+            <div class="howner">Jane Kimani</div>
+            <div class="howner">jane.kimani@email.com</div>
+          </div>
+          <div class="divider-line"></div>
+          <div class="spacer"></div>
+          <div class="receipt-item"><div><div class="receipt-item-name">Fortune Cooking Oil 2L</div><div class="receipt-item-size">2 L</div></div><span class="receipt-item-price">KES 289</span></div>
+          <div class="receipt-item"><div><div class="receipt-item-name">Ariel Washing Powder</div><div class="receipt-item-size">1 Kg</div></div><span class="receipt-item-price">KES 185</span></div>
+          <div class="receipt-item"><div><div class="receipt-item-name">Sugar 2Kg</div><div class="receipt-item-size">2 Kg</div></div><span class="receipt-item-price">KES 220</span></div>
+          <div class="receipt-item"><div><div class="receipt-item-name">Toothpaste</div><div class="receipt-item-size">75ml</div></div><span class="receipt-item-price">KES 120</span></div>
+          <div class="divider-line" style="margin-top:6px;"></div>
+          <div class="receipt-row"><span class="rlabel">Subtotal</span><span class="rval">KES 814</span></div>
+          <div class="receipt-row"><span class="rlabel">Service fee (1%)</span><span class="rval">KES 8</span></div>
+          <div class="divider-line"></div>
+          <div class="receipt-row"><span class="rlabel total">Grand Total</span><span class="rval total">KES 822</span></div>
+          <div class="min-order-warning">
+            <span style="font-size:16px;">⚠️</span>
+            <span>Naivas min. order is KES 2,000. Current basket is below the minimum.</span>
+          </div>
+          <button style="width:100%;height:50px;border-radius:14px;background:var(--primary);border:none;display:flex;align-items:center;justify-content:center;gap:8px;color:white;font-size:15px;font-weight:700;cursor:pointer;margin-top:4px;">💳 Pay now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ PHASE 3 ═══════════ -->
+<p class="phase-label">Phase 3 — Checkout &amp; Confirmation</p>
+<div class="screen-row">
+
+  <!-- Screen 7: Checkout (full screen) -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">7</span>Checkout</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar" style="background:white;"><span class="status-time dark">9:41</span><div class="status-icons"><span class="dark">●●●</span><span class="dark">🔋</span></div></div>
+      <div class="app-bar"><span class="back-btn">‹</span><span class="title">Checkout</span></div>
+      <!-- Fulfilment tabs -->
+      <div style="background:white;padding:10px 16px 0;border-bottom:1px solid var(--divider);flex-shrink:0;">
+        <div style="display:flex;border-bottom:2px solid var(--divider);gap:0;">
+          <div style="flex:1;text-align:center;padding:8px 0;font-size:13px;font-weight:700;color:var(--naivas);border-bottom:2.5px solid var(--naivas);margin-bottom:-2px;display:flex;align-items:center;justify-content:center;gap:5px;">✓ Delivery</div>
+          <div style="flex:1;text-align:center;padding:8px 0;font-size:13px;font-weight:500;color:var(--text-hint);">Pick At Store</div>
+        </div>
+      </div>
+      <div class="body" style="overflow-y:auto;padding:14px;gap:12px;">
+        <!-- Delivery address -->
+        <div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--divider);padding:12px;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:18px;flex-shrink:0;">📍</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:10px;color:var(--text-hint);font-weight:600;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:2px;">Deliver to</div>
+            <div style="font-size:13px;font-weight:600;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Westlands, Nairobi</div>
+            <div style="font-size:11px;color:var(--text-secondary);">Kimani Home · Off Rhapta Rd</div>
+          </div>
+          <span style="font-size:12px;font-weight:600;color:var(--naivas);flex-shrink:0;">Change</span>
+        </div>
+        <!-- Order summary card -->
+        <div style="background:#F0FAF4;border:1px solid rgba(0,112,74,0.2);border-radius:12px;padding:12px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:0.7px;color:var(--naivas);text-transform:uppercase;margin-bottom:10px;">Order Summary</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Sub total (3 items)</span><span style="color:var(--primary);font-weight:600;">KES 814</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Service fee (1%)</span><span style="color:var(--primary);font-weight:600;">KES 8</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Delivery</span><span style="color:var(--success);font-weight:600;">Free</span></div>
+            <div style="height:1px;background:rgba(0,112,74,0.2);margin:2px 0;"></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;"><span style="color:var(--primary);font-weight:700;">Total (tax incl.)</span><span style="color:var(--primary);font-weight:800;">KES 822</span></div>
+          </div>
+        </div>
+        <!-- Payment method -->
+        <div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--divider);overflow:hidden;">
+          <div style="background:#F0FAF4;border-bottom:1px solid rgba(0,112,74,0.2);padding:10px 14px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.7px;color:var(--naivas);text-transform:uppercase;">Payment Method</div>
+          </div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;">
+            <!-- M-Pesa row (selected) -->
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--mpesa-green);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><div style="width:10px;height:10px;border-radius:50%;background:var(--mpesa-green);"></div></div>
+              <span style="font-size:18px;">📱</span>
+              <span style="font-size:13px;font-weight:600;color:var(--primary);flex:1;">M-Pesa</span>
+              <span style="font-size:10px;font-weight:700;background:rgba(22,163,74,0.12);color:var(--mpesa-green);border-radius:6px;padding:2px 7px;">Popular</span>
+            </div>
+            <!-- Card row (unselected) -->
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--divider);flex-shrink:0;"></div>
+              <span style="font-size:18px;">💳</span>
+              <span style="font-size:13px;color:var(--text-secondary);flex:1;">Debit / Credit card</span>
+            </div>
+          </div>
+        </div>
+        <!-- Phone number field (shown because M-Pesa selected) -->
+        <div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--divider);padding:12px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:0.6px;color:var(--text-hint);text-transform:uppercase;margin-bottom:8px;">M-Pesa Phone Number</div>
+          <div class="mpesa-input" style="margin-bottom:4px;">
+            <span style="color:var(--text-hint);margin-right:6px;">🇰🇪</span>
+            <span style="color:var(--primary);font-size:14px;font-weight:500;">0712 345 678</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-hint);">STK push will be sent to this number</div>
+        </div>
+        <div style="height:8px;"></div>
+      </div>
+      <!-- Sticky place-order button -->
+      <div style="padding:10px 16px 14px;background:var(--card-bg);border-top:1px solid var(--divider);flex-shrink:0;">
+        <button style="width:100%;height:50px;border-radius:14px;background:var(--naivas);border:none;color:white;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;"><span style="font-size:16px;">📲</span>Place Order · KES 822</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 8: Order Confirmed -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">8</span>Order Confirmed</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar" style="background:white;"><span class="status-time dark">9:41</span><div class="status-icons"><span class="dark">●●●</span><span class="dark">🔋</span></div></div>
+      <div class="app-bar"><span class="title" style="text-align:center;width:100%;">Order Confirmed</span></div>
+      <div class="body" style="overflow-y:auto;padding:14px;gap:12px;align-items:stretch;">
+        <!-- Success icon -->
+        <div style="display:flex;flex-direction:column;align-items:center;padding:16px 0 10px;">
+          <div style="width:72px;height:72px;border-radius:50%;background:rgba(22,163,74,0.12);display:flex;align-items:center;justify-content:center;font-size:38px;margin-bottom:12px;">✅</div>
+          <div style="font-size:20px;font-weight:800;color:var(--primary);margin-bottom:6px;">Order placed!</div>
+          <div style="font-size:12px;color:var(--text-secondary);text-align:center;line-height:1.5;padding:0 10px;">Your Naivas order has been received.<br>An M-Pesa STK push was sent to your phone.</div>
+        </div>
+        <!-- Order detail card -->
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--naivas);display:inline-block;"></span>
+            <span style="font-size:13px;font-weight:700;color:var(--primary);">Naivas Westlands</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Order #</span><span style="font-weight:600;color:var(--primary);">NAI-2025-0347</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Items</span><span style="font-weight:600;color:var(--primary);">3 items</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Total paid</span><span style="font-weight:700;color:var(--primary);">KES 822</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Payment</span><span style="font-weight:600;color:var(--mpesa-green);">M-Pesa · 0712 345 678</span></div>
+            <div style="height:1px;background:var(--divider);margin:2px 0;"></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-secondary);">Est. delivery</span><span style="font-weight:600;color:var(--primary);">Today, 12:00 – 2:00 PM</span></div>
+          </div>
+        </div>
+        <!-- Restock nudge -->
+        <div style="background:rgba(0,29,57,0.05);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:16px;">📦</span>
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">Once delivered, mark your supplies as restocked so your household stays up to date.</div>
+        </div>
+        <button style="width:100%;height:46px;border-radius:12px;background:var(--primary);border:none;color:white;font-size:14px;font-weight:700;cursor:pointer;">Track Order →</button>
+        <button class="outline-btn" style="margin-top:0;">Back to Shopping</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 9: Order Tracking -->
+  <div class="screen-wrap">
+    <div class="screen-title"><span class="screen-num">9</span>Order Tracking</div>
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status-bar"><span class="status-time">9:41</span><div class="status-icons"><span>●●●</span><span>🔋</span></div></div>
+      <div class="tracking-header">
+        <div class="track-label">Order via Naivas Westlands</div>
+        <div class="track-id">Order #NAI-2025-0347</div>
+        <div class="order-status-chip">🟢 Payment confirmed</div>
+      </div>
+      <div class="body" style="overflow-y:auto;gap:0;padding:14px;">
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span class="card-title" style="font-size:13px;">Kimani Home</span>
+            <span style="font-size:13px;font-weight:800;color:var(--primary);">KES 822</span>
+          </div>
+          <div class="card-sub">3 items · M-Pesa · 📍 Westlands, Nairobi</div>
+          <div class="card-sub" style="margin-top:3px;color:var(--success);font-weight:600;">Est. delivery: Today, 12:00 – 2:00 PM</div>
+        </div>
+        <div class="section-header" style="margin-bottom:8px;"><span class="section-title">Delivery status</span></div>
+        <div class="card">
+          <div class="step-row">
+            <div class="step-dot-col"><div class="step-dot done">✓</div><div class="step-line"></div></div>
+            <div><div class="step-title">Order placed &amp; paid</div><div class="step-sub">Today, 9:43 AM · M-Pesa confirmed</div></div>
+          </div>
+          <div class="step-row">
+            <div class="step-dot-col"><div class="step-dot active">⚡</div><div class="step-line"></div></div>
+            <div><div class="step-title">Being packed</div><div class="step-sub">Naivas Westlands — est. 15 min</div></div>
+          </div>
+          <div class="step-row">
+            <div class="step-dot-col"><div class="step-dot pending">○</div><div class="step-line"></div></div>
+            <div><div class="step-title">Out for delivery</div><div class="step-sub" style="color:var(--text-hint);">Pending</div></div>
+          </div>
+          <div class="step-row">
+            <div class="step-dot-col"><div class="step-dot pending">○</div></div>
+            <div><div class="step-title">Delivered</div><div class="step-sub" style="color:var(--text-hint);">Pending</div></div>
+          </div>
+        </div>
+        <div style="height:10px;"></div>
+        <button style="width:100%;height:46px;border-radius:12px;background:var(--primary);border:none;color:white;font-size:13px;font-weight:700;margin-bottom:8px;cursor:pointer;">📦 Mark supplies as restocked</button>
+        <button class="outline-btn" style="margin-top:0;font-size:13px;">Share order summary</button>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><span class="nav-icon">🏠</span><span class="nav-label">Home</span></div>
+        <div class="nav-item"><span class="nav-icon">📦</span><span class="nav-label">Supplies</span></div>
+        <div class="nav-item"><span class="nav-icon active">🛒</span><span class="nav-label active">Shopping</span></div>
+        <div class="nav-item"><span class="nav-icon">👕</span><span class="nav-label">Laundry</span></div>
+        <div class="nav-item"><span class="nav-icon">🍽</span><span class="nav-label">Meals</span></div>
+        <div class="nav-item"><span class="nav-icon">👧</span><span class="nav-label">Kids</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Legend ────────────────────────────────────────────────────────────── -->
+<div class="legend">
+  <h2>Flow Summary</h2>
+  <table>
+    <thead><tr><th>#</th><th>Screen</th><th>Key interaction</th><th>User role</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Dashboard Home</td><td>Alert banner shows low-stock count; tap → navigates to Shopping tab</td><td>Owner / Manager</td></tr>
+      <tr><td>2</td><td>Supplies Screen</td><td>Tap a status chip to update; attention-bordered cards = needs action</td><td>Owner / Manager</td></tr>
+      <tr><td>3</td><td>Add to Shopping</td><td>Auto-appears on Low/Finished tap; set qty + optional note → Add to List</td><td>Owner / Manager</td></tr>
+      <tr><td>4</td><td>Shopping Screen</td><td>Lists pending requests + finished; FAB opens Basket Compare</td><td>Owner</td></tr>
+      <tr><td>5</td><td>Basket Compare</td><td>3-card totals (Carrefour / Best Mix / Naivas); swap stores per item</td><td>Owner</td></tr>
+      <tr><td>6</td><td>Order Receipt</td><td>Household info, item list, subtotal, 1% service fee, min-order warning; "Pay now" → Checkout</td><td>Owner</td></tr>
+      <tr><td>7</td><td>Checkout</td><td>Delivery/Pickup tabs; delivery address; transparent totals; M-Pesa/Card selector; pre-filled phone; "Place Order" CTA</td><td>Owner</td></tr>
+      <tr><td>8</td><td>Order Confirmed</td><td>Success state: order #, total paid, M-Pesa confirmation, est. delivery; Track Order or Back to Shopping</td><td>Owner</td></tr>
+      <tr><td>9</td><td>Order Tracking</td><td>4-step delivery timeline; mark supplies as restocked when delivered</td><td>Owner</td></tr>
+    </tbody>
+  </table>
+  <div style="margin-top:20px;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;color:var(--text-hint);text-transform:uppercase;margin-bottom:10px;">Exact App Colors Used</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#001D39;"></div><span style="font-size:11px;color:var(--text-secondary);">#001D39 primaryTeal</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#49769F;"></div><span style="font-size:11px;color:var(--text-secondary);">#49769F uiBlue</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#F5F9FC;border:1px solid #A4C0D4;"></div><span style="font-size:11px;color:var(--text-secondary);">#F5F9FC surfaceLight</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#C8DFF0;border:1px solid #0A4174;"></div><span style="font-size:11px;color:var(--text-secondary);">#C8DFF0 Enough chip</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#FFF8E1;border:1px solid #B8860B;"></div><span style="font-size:11px;color:var(--text-secondary);">#FFF8E1 Running Low</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#FFEDE8;border:1px solid #D9442A;"></div><span style="font-size:11px;color:var(--text-secondary);">#FFEDE8 Very Low</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#FCECEC;border:1px solid #B71C1C;"></div><span style="font-size:11px;color:var(--text-secondary);">#FCECEC Finished</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#16A34A;"></div><span style="font-size:11px;color:var(--text-secondary);">#16A34A mpesaGreen</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#F1715A;"></div><span style="font-size:11px;color:var(--text-secondary);">#F1715A accentOrange</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:16px;border-radius:4px;background:#FBCE60;"></div><span style="font-size:11px;color:var(--text-secondary);">#FBCE60 accentYellow</span></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -20,6 +20,205 @@ import '../utilities/utilities_screen.dart';
 import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+bool _isPlaceholderWaterSupplier(GasSupplier? supplier) {
+  if (supplier == null) return false;
+  return supplier.name.trim().toLowerCase() == 'jibu' &&
+      supplier.phone.trim() == '+254700000000' &&
+      supplier.mpesaTill?.trim() == '530530';
+}
+
+GasSupplier? _visibleWaterSupplier(UtilityTracker water) {
+  final supplier = water.supplier1;
+  return _isPlaceholderWaterSupplier(supplier) ? null : supplier;
+}
+
+Future<void> showUtilitySetupPicker(BuildContext context) async {
+  final auth = context.read<AuthProvider>();
+  final utilProv = context.read<UtilityProvider>();
+
+  void openSheet(Widget sheet) {
+    Future.microtask(() {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => sheet,
+      );
+    });
+  }
+
+  final gas = utilProv.gasItems.isNotEmpty ? utilProv.gasItems.first : null;
+  final electricity =
+      utilProv.electricityItems.isNotEmpty ? utilProv.electricityItems.first : null;
+  final drinkingWaterItems =
+      utilProv.waterItems.where((item) => item.isDrinkingWater).toList();
+  final drinkingWater =
+      drinkingWaterItems.isNotEmpty ? drinkingWaterItems.first : null;
+  final internet =
+      utilProv.internetItems.isNotEmpty ? utilProv.internetItems.first : null;
+  final waterBill =
+      utilProv.waterBillItems.isNotEmpty ? utilProv.waterBillItems.first : null;
+  final serviceCharge = utilProv.serviceChargeItems.isNotEmpty
+      ? utilProv.serviceChargeItems.first
+      : null;
+  final rent = utilProv.rentItems.isNotEmpty ? utilProv.rentItems.first : null;
+  final payTv =
+      utilProv.payTvItems.isNotEmpty ? utilProv.payTvItems.first : null;
+
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => Container(
+      decoration: const BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Set Up Utilities',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Choose what you want to add or reconfigure for this household.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _UtilitySetupActionTile(
+              icon: Icons.water_drop_outlined,
+              title: 'Drinking Water Supplier',
+              subtitle: 'Bottle tracking, reorder settings, and supplier details.',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                openSheet(_WaterSetupSheet(existing: drinkingWater));
+              },
+            ),
+            _UtilitySetupActionTile(
+              icon: Icons.bolt_outlined,
+              title: 'Electricity',
+              subtitle: 'Prepaid tokens or postpaid bill tracking.',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                openSheet(_ElecSetupSheet(item: electricity));
+              },
+            ),
+            _UtilitySetupActionTile(
+              icon: Icons.wifi_outlined,
+              title: 'Internet',
+              subtitle: 'Monthly due date and payment details.',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                openSheet(_NetSetupSheet(item: internet));
+              },
+            ),
+            if (waterBill != null)
+              _UtilitySetupActionTile(
+                icon: Icons.water_outlined,
+                title: 'Metered Water',
+                subtitle: 'Track monthly bill amount and units consumed.',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  openSheet(_SupWaterBillSetupSheet(item: waterBill));
+                },
+              ),
+            if (serviceCharge != null)
+              _UtilitySetupActionTile(
+                icon: Icons.cleaning_services_outlined,
+                title: 'Service Charge',
+                subtitle: 'Garbage or estate charge due dates.',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  openSheet(_SupServiceChargeSetupSheet(item: serviceCharge));
+                },
+              ),
+            if (auth.isOwner && rent != null)
+              _UtilitySetupActionTile(
+                icon: Icons.home_outlined,
+                title: 'Rent',
+                subtitle: 'Owner-only rent amount and due date.',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  openSheet(_SupRentSetupSheet(item: rent));
+                },
+              ),
+            if (payTv != null)
+              _UtilitySetupActionTile(
+                icon: Icons.tv_outlined,
+                title: 'Pay TV',
+                subtitle: 'Subscription due date and payment details.',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  openSheet(_SupPayTvSetupSheet(item: payTv));
+                },
+              ),
+            if (gas != null)
+              _UtilitySetupActionTile(
+                icon: Icons.local_fire_department_outlined,
+                title: 'Cooking Gas',
+                subtitle: 'Cylinder details, refill duration, and gas supplier setup.',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  openSheet(_GasSetupSheet(existing: gas));
+                },
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _UtilitySetupActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _UtilitySetupActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.primaryTeal.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: AppColors.primaryTeal, size: 20),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
+    );
+  }
+}
+
 class SuppliesScreen extends StatefulWidget {
   const SuppliesScreen({super.key});
 
@@ -129,6 +328,7 @@ class _SuppliesScreenState extends State<SuppliesScreen>
     final supply = context.watch<SupplyProvider>();
     final auth = context.watch<AuthProvider>();
     context.watch<UtilityProvider>(); // rebuild on utility changes for search
+    final canManageUtilities = auth.isOwner || auth.isHouseManager;
 
     final filtered = _selectedCategory == 'All'
         ? supply.visibleSupplies(isOwner: auth.isOwner)
@@ -156,19 +356,35 @@ class _SuppliesScreenState extends State<SuppliesScreen>
       appBar: AppBar(
         title: const Text('Supplies'),
       ),
-      floatingActionButton: (auth.isOwner && _tabController.index == 0)
-          ? FloatingActionButton.extended(
-              heroTag: 'supplies_fab',
-              backgroundColor: AppColors.primaryTeal,
-              onPressed: () => _showAddSupplySheet(context),
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text(
-                'Add Supply',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-            )
-          : null,
+      floatingActionButton: _tabController.index == 0
+          ? (auth.isOwner
+              ? FloatingActionButton.extended(
+                  heroTag: 'supplies_fab',
+                  backgroundColor: AppColors.primaryTeal,
+                  onPressed: () => _showAddSupplySheet(context),
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text(
+                    'Add Supply',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                )
+              : null)
+          : (canManageUtilities
+              ? FloatingActionButton.extended(
+                  heroTag: 'utilities_fab',
+                  backgroundColor: AppColors.utilitiesOrange,
+                  onPressed: () => showUtilitySetupPicker(context),
+                  icon: const Icon(Icons.tune_outlined, color: Colors.white),
+                  label: const Text(
+                    'Set Up Utility',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              : null),
       body: Column(
         children: [
           // ── Pill segment switcher ─────────────────────────────
@@ -1755,6 +1971,9 @@ class _ElecPrepaidCard extends StatelessWidget {
     final units = elec.unitsRemaining ?? 0;
     final isAlert = elec.isLowAlert;
     final lowAlertSent = elec.electricityLowAlertSent;
+    final estimatedDays = elec.electricityEstimatedDaysRemaining;
+    final averageDailyUse = elec.electricityAverageDailyConsumption;
+    final latestPurchase = elec.latestElectricityTokenPurchase;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1918,6 +2137,23 @@ class _ElecPrepaidCard extends StatelessWidget {
                       label:
                           'Usual top-up KSh ${elec.typicalTokenAmount!.toStringAsFixed(0)}',
                     ),
+                  if (estimatedDays != null)
+                    _InfoChip(
+                      icon: Icons.timelapse_outlined,
+                      label: '~$estimatedDays day${estimatedDays == 1 ? '' : 's'} left',
+                    ),
+                  if (averageDailyUse != null)
+                    _InfoChip(
+                      icon: Icons.analytics_outlined,
+                      label:
+                          '${averageDailyUse.toStringAsFixed(1)} kWh/day',
+                    ),
+                  if (latestPurchase != null)
+                    _InfoChip(
+                      icon: Icons.receipt_long_outlined,
+                      label:
+                          'Last top-up KSh ${latestPurchase.amountSpent.toStringAsFixed(0)} · ${latestPurchase.unitsBought.toStringAsFixed(0)} kWh',
+                    ),
                   if (elec.electricityPaybill != null)
                     _InfoChip(
                       icon: Icons.phone_android_outlined,
@@ -2011,8 +2247,12 @@ class _ElecPrepaidCard extends StatelessWidget {
   }
 
   void _showRefilledSheet(BuildContext context) {
-    final ctrl = TextEditingController(
+    final amountCtrl = TextEditingController(
         text: elec.typicalTokenAmount?.toStringAsFixed(0) ?? '');
+    final unitsCtrl = TextEditingController();
+    final balanceCtrl = TextEditingController(
+      text: elec.unitsRemaining?.toStringAsFixed(0) ?? '',
+    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2037,16 +2277,34 @@ class _ElecPrepaidCard extends StatelessWidget {
                     onPressed: () => Navigator.pop(ctx)),
               ],
             ),
-            const Text('Enter the new token balance after purchase.',
+            const Text('Record the amount spent, units bought, and the balance after top-up.',
                 style:
                     TextStyle(fontSize: 13, color: AppColors.textSecondary)),
             const SizedBox(height: 14),
             TextFormField(
-              controller: ctrl,
+              controller: amountCtrl,
               autofocus: true,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: 'New balance (kWh)',
+                labelText: 'Amount spent',
+                prefixText: 'KSh ',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: unitsCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Units bought',
+                suffixText: 'kWh',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: balanceCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Balance after top-up',
                 suffixText: 'kWh',
               ),
             ),
@@ -2055,16 +2313,26 @@ class _ElecPrepaidCard extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  final val = double.tryParse(ctrl.text.trim());
-                  if (val == null || val < 0) return;
+                  final amountSpent = double.tryParse(amountCtrl.text.trim());
+                  final unitsBought = double.tryParse(unitsCtrl.text.trim());
+                  final balanceAfterTopUp =
+                      double.tryParse(balanceCtrl.text.trim());
+                  if (amountSpent == null || amountSpent <= 0) return;
+                  if (unitsBought == null || unitsBought <= 0) return;
                   final auth = ctx.read<AuthProvider>();
                   ctx.read<UtilityProvider>().markTokensRefilled(
-                      elec.id, auth.household!.id, val);
+                    elec.id,
+                    auth.household!.id,
+                    unitsBought,
+                    amountSpent: amountSpent,
+                    balanceAfterPurchase: balanceAfterTopUp,
+                  );
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                          'Tokens updated to ${val.toStringAsFixed(0)} kWh'),
+                        'Recorded KSh ${amountSpent.toStringAsFixed(0)} for ${unitsBought.toStringAsFixed(0)} kWh',
+                      ),
                       backgroundColor: AppColors.primaryTeal,
                     ),
                   );
@@ -3462,7 +3730,7 @@ class _WaterSetupCard extends StatelessWidget {
           const SizedBox(height: 16),
           const Text(
             'Set up your household water supply to track bottle levels, '
-            'reorder automatically, and pay your Jibu or other supplier easily.',
+            'reorder automatically, and pay your supplier easily.',
             style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
@@ -3538,6 +3806,7 @@ class _WaterStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visibleSupplier = _visibleWaterSupplier(water);
     final full = water.fullContainers ?? 0;
     final empty = water.emptyContainers ?? 0;
     final total = water.totalContainers ?? 0;
@@ -3683,10 +3952,10 @@ class _WaterStatusCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 8,
             children: [
-              if (water.supplier1 != null)
+              if (visibleSupplier != null)
                 _WaterInfoChip(
                     icon: Icons.storefront_outlined,
-                    label: water.supplier1!.name),
+                    label: visibleSupplier.name),
               if (water.pricePerContainer != null)
                 _WaterInfoChip(
                   icon: Icons.payments_outlined,
@@ -3774,6 +4043,7 @@ class _WaterActionsRow extends StatelessWidget {
     final canManage = auth.isOwner || auth.isHouseManager;
     final full = water.fullContainers ?? 0;
     final status = water.paymentStatus ?? UtilityPaymentStatus.unpaid;
+    final supplier = _visibleWaterSupplier(water);
 
     if (!canManage) return const SizedBox.shrink();
 
@@ -3791,7 +4061,7 @@ class _WaterActionsRow extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: water.supplier1 != null
+                onPressed: supplier != null
                     ? () => _orderWater(context)
                     : null,
                 icon: const Icon(Icons.local_shipping_outlined, size: 18),
@@ -3872,7 +4142,8 @@ class _WaterActionsRow extends StatelessWidget {
   }
 
   void _orderWater(BuildContext context) {
-    final supplier = water.supplier1!;
+    final supplier = _visibleWaterSupplier(water);
+    if (supplier == null) return;
     final qty = water.typicalOrderQuantity ?? 2;
     final size = water.containerSizeLitres ?? 18.5;
     final sizeFmt =
@@ -3959,7 +4230,7 @@ class _WaterActionsRow extends StatelessWidget {
         content: Text(
           water.pricePerContainer != null && water.typicalOrderQuantity != null
               ? 'Mark KSh ${(water.pricePerContainer! * water.typicalOrderQuantity!).toStringAsFixed(0)} '
-                'to ${water.supplier1?.name ?? 'supplier'} as paid?'
+                'to ${_visibleWaterSupplier(water)?.name ?? 'supplier'} as paid?'
               : 'Mark water delivery payment as paid?',
         ),
         actions: [
@@ -4006,7 +4277,7 @@ class _WaterSupplierCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canManage = auth.isOwner || auth.isHouseManager;
-    final supplier = water.supplier1;
+    final supplier = _visibleWaterSupplier(water);
 
     return HomeFlowCard(
       child: Column(
@@ -4088,15 +4359,33 @@ class _WaterSupplierTile extends StatelessWidget {
   const _WaterSupplierTile(
       {required this.supplier, required this.water});
 
-  String _orderMessage() {
+  String _orderMessage(BuildContext context) {
+    final household = context.read<AuthProvider>().household;
     final qty = water.typicalOrderQuantity ?? 2;
     final size = water.containerSizeLitres ?? 18.5;
     final sizeFmt =
         size % 1 == 0 ? '${size.toInt()}L' : '${size}L';
-    final addr = water.deliveryAddress?.trim();
-    final addrStr = (addr != null && addr.isNotEmpty) ? ' to $addr' : '';
-    return 'Hi! I\'d like to order $qty × $sizeFmt drinking water ${qty == 1 ? 'bottle' : 'bottles'}$addrStr. '
-        'Kindly confirm when you can deliver and let me know the total cost. Thank you! 🙏';
+    final supplierAddress = water.deliveryAddress?.trim();
+    final householdAddress = household?.deliveryAddress?.trim();
+    final deliveryNotes = household?.deliverySmsNotes?.trim();
+    final address = supplierAddress?.isNotEmpty == true
+        ? supplierAddress
+        : householdAddress;
+    final buffer = StringBuffer(
+      'Hi! I\'d like to order $qty × $sizeFmt drinking water '
+      '${qty == 1 ? 'bottle' : 'bottles'}',
+    );
+    if (address != null && address.isNotEmpty) {
+      buffer.write(' to $address');
+    }
+    buffer.write('.');
+    if (deliveryNotes != null && deliveryNotes.isNotEmpty) {
+      buffer.write(' Delivery notes: $deliveryNotes.');
+    }
+    buffer.write(
+      ' Kindly confirm when you can deliver and let me know the total cost. Thank you! 🙏',
+    );
+    return buffer.toString();
   }
 
   Future<void> _call() async {
@@ -4112,12 +4401,14 @@ class _WaterSupplierTile extends StatelessWidget {
         : phone.startsWith('0')
             ? '254${phone.substring(1)}'
             : phone;
-    final msg = Uri.encodeComponent(_orderMessage());
+    final msg = Uri.encodeComponent(_orderMessage(context));
     final waUri = Uri.parse('https://wa.me/$intlPhone?text=$msg');
     if (await canLaunchUrl(waUri)) {
       launchUrl(waUri, mode: LaunchMode.externalApplication);
     } else {
-      await Clipboard.setData(ClipboardData(text: _orderMessage()));
+      await Clipboard.setData(
+        ClipboardData(text: _orderMessage(context)),
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -4133,11 +4424,13 @@ class _WaterSupplierTile extends StatelessWidget {
     final uri = Uri(
         scheme: 'sms',
         path: supplier.phone,
-        queryParameters: {'body': _orderMessage()});
+        queryParameters: {'body': _orderMessage(context)});
     if (await canLaunchUrl(uri)) {
       launchUrl(uri);
     } else {
-      await Clipboard.setData(ClipboardData(text: _orderMessage()));
+      await Clipboard.setData(
+        ClipboardData(text: _orderMessage(context)),
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -5839,34 +6132,186 @@ class _GasActionsRow extends StatelessWidget {
   }
 
   void _confirmRefill(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Record Refill'),
-        content: const Text(
-            'Mark gas as refilled today? This resets the countdown to the estimated run-out date.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _GasRefillDateSheet(gas: gas),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// GAS REFILL DATE SHEET — lets user pick the actual refill date
+// ─────────────────────────────────────────────────────────────────────
+
+class _GasRefillDateSheet extends StatefulWidget {
+  final UtilityTracker gas;
+  const _GasRefillDateSheet({required this.gas});
+
+  @override
+  State<_GasRefillDateSheet> createState() => _GasRefillDateSheetState();
+}
+
+class _GasRefillDateSheetState extends State<_GasRefillDateSheet> {
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = DateTime.now();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now,
+      helpText: 'When was the gas refilled?',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: AppColors.primaryTeal,
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  String _formatDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final day = DateTime(d.year, d.month, d.day);
+    if (day == today) return 'Today';
+    if (day == yesterday) return 'Yesterday';
+    final months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isToday = DateTime(
+            _selectedDate.year, _selectedDate.month, _selectedDate.day) ==
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text('Record Gas Refill',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 6),
+          const Text(
+              'When was the gas refilled? Pick the actual date even if you forgot to log it earlier.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const SizedBox(height: 20),
+
+          // Date selector row
+          GestureDetector(
+            onTap: _pickDate,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.primaryTeal, width: 1.5),
+                borderRadius: BorderRadius.circular(12),
+                color: AppColors.primaryTeal.withValues(alpha: 0.05),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_outlined,
+                      size: 18, color: AppColors.primaryTeal),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _formatDate(_selectedDate),
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textSecondary),
+                ],
+              ),
+            ),
+          ),
+
+          if (!isToday) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => setState(() => _selectedDate = DateTime.now()),
+              child: const Text('Use today instead',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.primaryTeal,
+                      fontWeight: FontWeight.w500)),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryTeal,
-                minimumSize: const Size(0, 40),
-                padding: const EdgeInsets.symmetric(horizontal: 20)),
-            onPressed: () {
-              Navigator.pop(ctx);
-              final utilProv = context.read<UtilityProvider>();
-              final auth = context.read<AuthProvider>();
-              utilProv.recordRefill(gas.id, auth.household!.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Gas refill recorded ✓'),
-                    backgroundColor: AppColors.primaryTeal),
-              );
-            },
-            child: const Text('Confirm'),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                final utilProv = context.read<UtilityProvider>();
+                final auth = context.read<AuthProvider>();
+                utilProv.recordRefill(widget.gas.id, auth.household!.id,
+                    refilledAt: _selectedDate);
+                final label = isToday
+                    ? 'Gas refill recorded ✓'
+                    : 'Gas refill logged for ${_formatDate(_selectedDate)} ✓';
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(label),
+                      backgroundColor: AppColors.primaryTeal),
+                );
+              },
+              child: const Text('Save Refill',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            ),
           ),
         ],
       ),
@@ -6033,12 +6478,26 @@ class _SupplierTile extends StatelessWidget {
         ? (gas.gasBrandCustom ?? '')
         : (gas.gasBrand?.displayName ?? '');
     final brandStr = brand.isNotEmpty ? '$brand ' : '';
-    final addr = gas.deliveryAddress?.trim();
-    final addrStr = (addr != null && addr.isNotEmpty)
-        ? ' to $addr'
-        : '';
-    return 'Hi! I\'d like to order $brandStr${kg}kg cooking gas$addrStr. '
-        'Kindly confirm your availability and share payment details. Thank you! 🙏';
+    final supplierAddress = gas.deliveryAddress?.trim();
+    final householdAddress = auth.household?.deliveryAddress?.trim();
+    final deliveryNotes = auth.household?.deliverySmsNotes?.trim();
+    final address = supplierAddress?.isNotEmpty == true
+        ? supplierAddress
+        : householdAddress;
+    final buffer = StringBuffer(
+      'Hi! I\'d like to order $brandStr${kg}kg cooking gas',
+    );
+    if (address != null && address.isNotEmpty) {
+      buffer.write(' to $address');
+    }
+    buffer.write('.');
+    if (deliveryNotes != null && deliveryNotes.isNotEmpty) {
+      buffer.write(' Delivery notes: $deliveryNotes.');
+    }
+    buffer.write(
+      ' Kindly confirm your availability and share payment details. Thank you! 🙏',
+    );
+    return buffer.toString();
   }
 
   Future<void> _call() async {
@@ -7640,7 +8099,11 @@ class _SupplyCard extends StatelessWidget {
     final auth = context.read<AuthProvider>();
     final supply = context.read<SupplyProvider>();
 
-    return HomeFlowCard(
+    return GestureDetector(
+      onLongPress: isOwner
+          ? () => _confirmRemove(context, auth, supply)
+          : null,
+      child: HomeFlowCard(
       borderColor: item.needsAttention
           ? AppColors.accentOrange.withValues(alpha: 0.3)
           : null,
@@ -7848,6 +8311,43 @@ class _SupplyCard extends StatelessWidget {
           ],
         ],
       ),
+    ), // end HomeFlowCard
+    ); // end GestureDetector
+  }
+
+  void _confirmRemove(
+      BuildContext context, AuthProvider auth, SupplyProvider supply) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Remove item?'),
+        content: Text(
+            'Remove "${item.name}" from your tracked supplies?\nYou can add it back later from Browse Suggestions.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              supply.removeSupplyItem(item.id, auth.household!.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('"${item.name}" removed from your list'),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            },
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -7980,6 +8480,7 @@ class _AddSupplySheet extends StatefulWidget {
 
 class _AddSupplySheetState extends State<_AddSupplySheet> {
   final _nameCtrl = TextEditingController();
+  final _brandCtrl = TextEditingController();
   String _category = AppConstants.supplyCategories.first;
   String _unit = AppConstants.unitTypes.first;
   bool _isOwnerOnly = false;
@@ -7987,6 +8488,7 @@ class _AddSupplySheetState extends State<_AddSupplySheet> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _brandCtrl.dispose();
     super.dispose();
   }
 
@@ -8066,6 +8568,15 @@ class _AddSupplySheetState extends State<_AddSupplySheet> {
             autofocus: false,
           ),
           const SizedBox(height: 12),
+          TextFormField(
+            controller: _brandCtrl,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Preferred brand (optional)',
+              hintText: 'e.g. Geisha, Ajab, Hobby',
+            ),
+          ),
+          const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _category,
             decoration: const InputDecoration(labelText: 'Category'),
@@ -8116,6 +8627,9 @@ class _AddSupplySheetState extends State<_AddSupplySheet> {
                 expectedDurationDays:
                     _nameCtrl.text.toLowerCase().contains('gas') ? 42 : null,
                 isOwnerOnly: _isOwnerOnly,
+                preferredBrand: _brandCtrl.text.trim().isEmpty
+                    ? null
+                    : _brandCtrl.text.trim(),
               );
               supply.addSupplyItem(item, auth.household!.id);
               Navigator.pop(context);
@@ -8843,6 +9357,31 @@ class _WaterBillStatusCard extends StatelessWidget {
               _InfoTile(label: 'Days left', value: days != null ? '$days' : '—'),
             ],
           ),
+          if (item.waterBillUnitsUsed != null) ...[            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryTeal.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primaryTeal.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.water_drop_outlined, size: 15, color: AppColors.primaryTeal),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${item.waterBillUnitsUsed!.toStringAsFixed(1)} m³ consumed this cycle',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryTeal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Text(
             item.waterBillStatusMessage,
@@ -8984,6 +9523,7 @@ class _SupWaterBillSetupSheetState extends State<_SupWaterBillSetupSheet> {
   late final TextEditingController _amountCtrl;
   late final TextEditingController _tillCtrl;
   late final TextEditingController _accountCtrl;
+  late final TextEditingController _unitsCtrl;
   bool _isPaybill = true;
 
   @override
@@ -8994,6 +9534,7 @@ class _SupWaterBillSetupSheetState extends State<_SupWaterBillSetupSheet> {
     _amountCtrl = TextEditingController(text: i.waterBillAmount?.toStringAsFixed(0) ?? '');
     _tillCtrl = TextEditingController(text: i.waterBillMpesaTill ?? '');
     _accountCtrl = TextEditingController(text: i.waterBillMpesaAccountRef ?? '');
+    _unitsCtrl = TextEditingController(text: i.waterBillUnitsUsed?.toStringAsFixed(1) ?? '');
     _isPaybill = i.waterBillIsPaybill;
   }
 
@@ -9003,6 +9544,7 @@ class _SupWaterBillSetupSheetState extends State<_SupWaterBillSetupSheet> {
     _amountCtrl.dispose();
     _tillCtrl.dispose();
     _accountCtrl.dispose();
+    _unitsCtrl.dispose();
     super.dispose();
   }
 
@@ -9078,6 +9620,16 @@ class _SupWaterBillSetupSheetState extends State<_SupWaterBillSetupSheet> {
                 decoration: const InputDecoration(labelText: 'Account reference', hintText: 'e.g. meter number'),
               ),
             ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _unitsCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Units consumed this cycle (m³)',
+                hintText: 'e.g. 12.5',
+                prefixIcon: Icon(Icons.water_drop_outlined),
+              ),
+            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -9092,6 +9644,7 @@ class _SupWaterBillSetupSheetState extends State<_SupWaterBillSetupSheet> {
                     mpesaTill: _tillCtrl.text.trim().isEmpty ? null : _tillCtrl.text.trim(),
                     isPaybill: _isPaybill,
                     mpesaAccountRef: _accountCtrl.text.trim().isEmpty ? null : _accountCtrl.text.trim(),
+                    unitsUsed: double.tryParse(_unitsCtrl.text.trim()),
                   );
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(

@@ -27,6 +27,36 @@ class UtilityUsageEntry {
       );
 }
 
+/// A single prepaid-electricity token purchase.
+class ElectricityTokenPurchaseEntry {
+  final DateTime date;
+  final double unitsBought;
+  final double amountSpent;
+  final double? balanceAfterPurchase;
+
+  const ElectricityTokenPurchaseEntry({
+    required this.date,
+    required this.unitsBought,
+    required this.amountSpent,
+    this.balanceAfterPurchase,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'date': date.toIso8601String(),
+        'unitsBought': unitsBought,
+        'amountSpent': amountSpent,
+        'balanceAfterPurchase': balanceAfterPurchase,
+      };
+
+  factory ElectricityTokenPurchaseEntry.fromJson(Map<String, dynamic> j) =>
+      ElectricityTokenPurchaseEntry(
+        date: DateTime.parse(j['date']),
+        unitsBought: (j['unitsBought'] as num).toDouble(),
+        amountSpent: (j['amountSpent'] as num).toDouble(),
+        balanceAfterPurchase: (j['balanceAfterPurchase'] as num?)?.toDouble(),
+      );
+}
+
 enum GasCylinderSize { kg6, kg13, kg35, kg50 }
 
 /// Alert level for cooking gas status
@@ -221,6 +251,8 @@ class UtilityTracker {
   final String? waterBillMpesaAccountRef;
   /// Manager has sent "bill arrived" notification to owner
   final bool waterBillNoteSent;
+  /// Units consumed this billing cycle (m³ or whatever the meter measures)
+  final double? waterBillUnitsUsed;
 
   // ── Service/garbage charge fields ──────────────────────────────
   /// Whether service charge has been set up
@@ -278,6 +310,22 @@ class UtilityTracker {
   final bool payTvIsPaybill;
   final String? payTvMpesaAccountRef;
 
+  // ── Custom / other utility fields ─────────────────────────────
+  /// Whether this custom utility has been set up
+  final bool otherSetupDone;
+  /// Day of month the bill/payment is due
+  final int? otherDueDayOfMonth;
+  /// Monthly amount (KSh)
+  final double? otherMonthlyAmount;
+  /// Payment status for the current cycle
+  final UtilityPaymentStatus? otherPaymentStatus;
+  /// When this utility was last paid
+  final DateTime? otherLastPaidAt;
+  /// M-Pesa paybill or till for payment
+  final String? otherMpesaTill;
+  final bool otherIsPaybill;
+  final String? otherMpesaAccountRef;
+
   // ── Shared fields ──────────────────────────────────────────────
   final String label;            // e.g. "Kitchen Gas", "Main Electricity"
   final String? notes;
@@ -286,6 +334,8 @@ class UtilityTracker {
   final bool isOwnerOnly;
   /// History of "amount used" entries logged by household members.
   final List<UtilityUsageEntry> usageLogs;
+  /// History of prepaid electricity token purchases.
+  final List<ElectricityTokenPurchaseEntry> electricityTokenPurchases;
 
   UtilityTracker({
     required this.id,
@@ -347,6 +397,7 @@ class UtilityTracker {
     this.waterBillIsPaybill = false,
     this.waterBillMpesaAccountRef,
     this.waterBillNoteSent = false,
+    this.waterBillUnitsUsed,
     this.serviceChargeSetupDone = false,
     this.serviceChargeDueDayOfMonth,
     this.serviceChargeAmount,
@@ -375,10 +426,19 @@ class UtilityTracker {
     this.payTvMpesaTill,
     this.payTvIsPaybill = false,
     this.payTvMpesaAccountRef,
+    this.otherSetupDone = false,
+    this.otherDueDayOfMonth,
+    this.otherMonthlyAmount,
+    this.otherPaymentStatus,
+    this.otherLastPaidAt,
+    this.otherMpesaTill,
+    this.otherIsPaybill = false,
+    this.otherMpesaAccountRef,
     this.notes,
     required this.updatedAt,
     this.isOwnerOnly = false,
     this.usageLogs = const [],
+    this.electricityTokenPurchases = const [],
   });
 
   /// Full brand display name (falls back to custom or "Gas Cylinder")
@@ -515,10 +575,117 @@ class UtilityTracker {
           payTvDaysUntilDue! <= 3 &&
           payTvPaymentStatus != UtilityPaymentStatus.paid;
     }
+    if (type == UtilityType.other) {
+      return otherDaysUntilDue != null &&
+          otherDaysUntilDue! <= 3 &&
+          otherPaymentStatus != UtilityPaymentStatus.paid;
+    }
     return false;
   }
 
   // ── Electricity helpers ────────────────────────────────────────
+
+  ElectricityTokenPurchaseEntry? get latestElectricityTokenPurchase {
+    if (electricityTokenPurchases.isEmpty) return null;
+    final purchases = [...electricityTokenPurchases]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return purchases.last;
+  }
+
+  double? get electricityAverageCostPerUnit {
+    if (type != UtilityType.electricity || isPostpaid) return null;
+    final pricedPurchases = electricityTokenPurchases
+        .where((entry) => entry.unitsBought > 0 && entry.amountSpent > 0)
+        .toList();
+    if (pricedPurchases.isEmpty) return null;
+    final totalUnits = pricedPurchases.fold<double>(
+      0,
+      (sum, entry) => sum + entry.unitsBought,
+    );
+    if (totalUnits <= 0) return null;
+    final totalSpend = pricedPurchases.fold<double>(
+      0,
+      (sum, entry) => sum + entry.amountSpent,
+    );
+    return totalSpend / totalUnits;
+  }
+
+  double? get electricityAverageDailyConsumption {
+    if (type != UtilityType.electricity || isPostpaid) return null;
+    final now = DateTime.now();
+
+    final recentUsage = usageLogs
+        .where((entry) => now.difference(entry.date).inDays <= 30)
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    if (recentUsage.isNotEmpty) {
+      final firstDate = recentUsage.first.date;
+      final daysCovered = now.difference(firstDate).inDays + 1;
+      if (daysCovered > 0) {
+        final totalUsed = recentUsage.fold<double>(
+          0,
+          (sum, entry) => sum + entry.quantity,
+        );
+        if (totalUsed > 0) {
+          return totalUsed / daysCovered;
+        }
+      }
+    }
+
+    final purchases = [...electricityTokenPurchases]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    if (purchases.isEmpty) return null;
+
+    final dailyRates = <double>[];
+    for (var index = 1; index < purchases.length; index++) {
+      final previous = purchases[index - 1];
+      final current = purchases[index];
+      final daysBetween = current.date.difference(previous.date).inDays;
+      if (daysBetween > 0 && previous.unitsBought > 0) {
+        dailyRates.add(previous.unitsBought / daysBetween);
+      }
+    }
+
+    final latest = purchases.last;
+    if (latest.balanceAfterPurchase != null && unitsRemaining != null) {
+      final consumedSinceLastTopUp = latest.balanceAfterPurchase! - unitsRemaining!;
+      final daysSinceLastTopUp = now.difference(latest.date).inDays;
+      if (consumedSinceLastTopUp > 0 && daysSinceLastTopUp > 0) {
+        dailyRates.add(consumedSinceLastTopUp / daysSinceLastTopUp);
+      }
+    }
+
+    if (dailyRates.isEmpty) return null;
+    return dailyRates.reduce((sum, value) => sum + value) / dailyRates.length;
+  }
+
+  int? get electricityEstimatedDaysRemaining {
+    if (type != UtilityType.electricity || isPostpaid) return null;
+    final remainingUnits = unitsRemaining;
+    final dailyConsumption = electricityAverageDailyConsumption;
+    if (remainingUnits == null || dailyConsumption == null || dailyConsumption <= 0) {
+      return null;
+    }
+    return (remainingUnits / dailyConsumption).ceil();
+  }
+
+  double get electricityTokenSpendThisMonth {
+    if (type != UtilityType.electricity || isPostpaid) return 0;
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    return electricityTokenPurchases
+        .where((entry) => !entry.date.isBefore(monthStart))
+        .fold<double>(0, (sum, entry) => sum + entry.amountSpent);
+  }
+
+  double get electricityTokenUnitsThisMonth {
+    if (type != UtilityType.electricity || isPostpaid) return 0;
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    return electricityTokenPurchases
+        .where((entry) => !entry.date.isBefore(monthStart))
+        .fold<double>(0, (sum, entry) => sum + entry.unitsBought);
+  }
 
   /// Days until next electricity bill is due (postpaid). Null if not configured.
   int? get electricityDaysUntilDue {
@@ -702,6 +869,38 @@ class UtilityTracker {
     return due.difference(DateTime(now.year, now.month, now.day)).inDays;
   }
 
+  // ── Custom utility helpers ─────────────────────────────────────
+
+  /// Days until this custom utility payment is due.
+  int? get otherDaysUntilDue {
+    if (otherDueDayOfMonth == null) return null;
+    final now = DateTime.now();
+    var due = DateTime(now.year, now.month, otherDueDayOfMonth!);
+    if (due.isBefore(now)) {
+      due = DateTime(now.year, now.month + 1, otherDueDayOfMonth!);
+    }
+    return due.difference(DateTime(now.year, now.month, now.day)).inDays;
+  }
+
+  /// Human-readable status message for a custom utility.
+  String get otherStatusMessage {
+    if (!otherSetupDone) return 'Tap to set up';
+    final days = otherDaysUntilDue;
+    final status = otherPaymentStatus ?? UtilityPaymentStatus.unpaid;
+    final amt = otherMonthlyAmount != null
+        ? 'KSh ${otherMonthlyAmount!.toStringAsFixed(0)}'
+        : '';
+    if (status == UtilityPaymentStatus.paid) {
+      return 'Paid ✓${otherLastPaidAt != null ? ' · paid ${_fmtDate(otherLastPaidAt!)}' : ''}';
+    }
+    if (days != null && days == 0) return '${amt.isNotEmpty ? '$amt ' : ''}due today — pay now!';
+    if (days != null && days <= 3) return '${amt.isNotEmpty ? '$amt ' : ''}due in $days days';
+    if (days != null) return 'Due in $days days${amt.isNotEmpty ? ' · $amt' : ''}';
+    return amt.isNotEmpty
+        ? '$amt monthly — mark as paid when settled'
+        : 'Mark as paid when settled';
+  }
+
   /// Human-readable Pay TV status message.
   String get payTvStatusMessage {
     if (!payTvSetupDone) return 'Set up Pay TV to track subscription payments';
@@ -837,6 +1036,7 @@ class UtilityTracker {
         'waterBillIsPaybill': waterBillIsPaybill,
         'waterBillMpesaAccountRef': waterBillMpesaAccountRef,
         'waterBillNoteSent': waterBillNoteSent,
+        'waterBillUnitsUsed': waterBillUnitsUsed,
         'serviceChargeSetupDone': serviceChargeSetupDone,
         'serviceChargeDueDayOfMonth': serviceChargeDueDayOfMonth,
         'serviceChargeAmount': serviceChargeAmount,
@@ -865,10 +1065,20 @@ class UtilityTracker {
         'payTvMpesaTill': payTvMpesaTill,
         'payTvIsPaybill': payTvIsPaybill,
         'payTvMpesaAccountRef': payTvMpesaAccountRef,
+        'otherSetupDone': otherSetupDone,
+        'otherDueDayOfMonth': otherDueDayOfMonth,
+        'otherMonthlyAmount': otherMonthlyAmount,
+        'otherPaymentStatus': otherPaymentStatus?.name,
+        'otherLastPaidAt': otherLastPaidAt?.toIso8601String(),
+        'otherMpesaTill': otherMpesaTill,
+        'otherIsPaybill': otherIsPaybill,
+        'otherMpesaAccountRef': otherMpesaAccountRef,
         'notes': notes,
         'updatedAt': updatedAt.toIso8601String(),
         'isOwnerOnly': isOwnerOnly,
         'usageLogs': usageLogs.map((e) => e.toJson()).toList(),
+        'electricityTokenPurchases':
+            electricityTokenPurchases.map((e) => e.toJson()).toList(),
       };
 
   factory UtilityTracker.fromJson(Map<String, dynamic> json) => UtilityTracker(
@@ -982,6 +1192,7 @@ class UtilityTracker {
         waterBillIsPaybill: json['waterBillIsPaybill'] ?? false,
         waterBillMpesaAccountRef: json['waterBillMpesaAccountRef'],
         waterBillNoteSent: json['waterBillNoteSent'] ?? false,
+        waterBillUnitsUsed: (json['waterBillUnitsUsed'] as num?)?.toDouble(),
         serviceChargeSetupDone: json['serviceChargeSetupDone'] ?? false,
         serviceChargeDueDayOfMonth: json['serviceChargeDueDayOfMonth'],
         serviceChargeAmount: (json['serviceChargeAmount'] as num?)?.toDouble(),
@@ -1031,11 +1242,31 @@ class UtilityTracker {
         payTvMpesaTill: json['payTvMpesaTill'],
         payTvIsPaybill: json['payTvIsPaybill'] ?? false,
         payTvMpesaAccountRef: json['payTvMpesaAccountRef'],
+        otherSetupDone: json['otherSetupDone'] ?? false,
+        otherDueDayOfMonth: json['otherDueDayOfMonth'],
+        otherMonthlyAmount: (json['otherMonthlyAmount'] as num?)?.toDouble(),
+        otherPaymentStatus: json['otherPaymentStatus'] != null
+            ? UtilityPaymentStatus.values.firstWhere(
+                (s) => s.name == json['otherPaymentStatus'],
+                orElse: () => UtilityPaymentStatus.unpaid,
+              )
+            : null,
+        otherLastPaidAt: json['otherLastPaidAt'] != null
+            ? DateTime.parse(json['otherLastPaidAt'])
+            : null,
+        otherMpesaTill: json['otherMpesaTill'],
+        otherIsPaybill: json['otherIsPaybill'] ?? false,
+        otherMpesaAccountRef: json['otherMpesaAccountRef'],
         isOwnerOnly: json['isOwnerOnly'] ?? false,
         notes: json['notes'],
         updatedAt: DateTime.parse(json['updatedAt']),
         usageLogs: (json['usageLogs'] as List<dynamic>? ?? [])
             .map((e) => UtilityUsageEntry.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        electricityTokenPurchases:
+          (json['electricityTokenPurchases'] as List<dynamic>? ?? [])
+            .map((e) => ElectricityTokenPurchaseEntry.fromJson(
+              e as Map<String, dynamic>))
             .toList(),
       );
 
@@ -1097,6 +1328,7 @@ class UtilityTracker {
     bool? waterBillIsPaybill,
     String? waterBillMpesaAccountRef,
     bool? waterBillNoteSent,
+    double? waterBillUnitsUsed,
     bool? serviceChargeSetupDone,
     int? serviceChargeDueDayOfMonth,
     double? serviceChargeAmount,
@@ -1125,9 +1357,18 @@ class UtilityTracker {
     String? payTvMpesaTill,
     bool? payTvIsPaybill,
     String? payTvMpesaAccountRef,
+    bool? otherSetupDone,
+    int? otherDueDayOfMonth,
+    double? otherMonthlyAmount,
+    UtilityPaymentStatus? otherPaymentStatus,
+    DateTime? otherLastPaidAt,
+    String? otherMpesaTill,
+    bool? otherIsPaybill,
+    String? otherMpesaAccountRef,
     bool? isOwnerOnly,
     String? notes,
     List<UtilityUsageEntry>? usageLogs,
+    List<ElectricityTokenPurchaseEntry>? electricityTokenPurchases,
   }) =>
       UtilityTracker(
         id: id,
@@ -1201,6 +1442,7 @@ class UtilityTracker {
         waterBillIsPaybill: waterBillIsPaybill ?? this.waterBillIsPaybill,
         waterBillMpesaAccountRef: waterBillMpesaAccountRef ?? this.waterBillMpesaAccountRef,
         waterBillNoteSent: waterBillNoteSent ?? this.waterBillNoteSent,
+        waterBillUnitsUsed: waterBillUnitsUsed ?? this.waterBillUnitsUsed,
         serviceChargeSetupDone: serviceChargeSetupDone ?? this.serviceChargeSetupDone,
         serviceChargeDueDayOfMonth: serviceChargeDueDayOfMonth ?? this.serviceChargeDueDayOfMonth,
         serviceChargeAmount: serviceChargeAmount ?? this.serviceChargeAmount,
@@ -1229,9 +1471,19 @@ class UtilityTracker {
         payTvMpesaTill: payTvMpesaTill ?? this.payTvMpesaTill,
         payTvIsPaybill: payTvIsPaybill ?? this.payTvIsPaybill,
         payTvMpesaAccountRef: payTvMpesaAccountRef ?? this.payTvMpesaAccountRef,
+        otherSetupDone: otherSetupDone ?? this.otherSetupDone,
+        otherDueDayOfMonth: otherDueDayOfMonth ?? this.otherDueDayOfMonth,
+        otherMonthlyAmount: otherMonthlyAmount ?? this.otherMonthlyAmount,
+        otherPaymentStatus: otherPaymentStatus ?? this.otherPaymentStatus,
+        otherLastPaidAt: otherLastPaidAt ?? this.otherLastPaidAt,
+        otherMpesaTill: otherMpesaTill ?? this.otherMpesaTill,
+        otherIsPaybill: otherIsPaybill ?? this.otherIsPaybill,
+        otherMpesaAccountRef: otherMpesaAccountRef ?? this.otherMpesaAccountRef,
         isOwnerOnly: isOwnerOnly ?? this.isOwnerOnly,
         notes: notes ?? this.notes,
         usageLogs: usageLogs ?? this.usageLogs,
+        electricityTokenPurchases:
+            electricityTokenPurchases ?? this.electricityTokenPurchases,
         updatedAt: DateTime.now(),
       );
 }

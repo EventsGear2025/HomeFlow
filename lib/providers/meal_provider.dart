@@ -156,22 +156,65 @@ class MealProvider extends ChangeNotifier {
 class ChildProvider extends ChangeNotifier {
   List<ChildModel> _children = [];
   List<ChildRoutineLog> _routineLogs = [];
+  List<ChildSchoolNeed> _schoolNeeds = [];
   bool _isLoading = false;
 
   List<ChildModel> get children => _children;
   bool get isLoading => _isLoading;
 
-  ChildRoutineLog? getTodaysLog(String childId) {
-    final today = DateTime.now();
+  // ── Routine logs ───────────────────────────────────────────────────────────
+
+  ChildRoutineLog? getLogForDate(String childId, DateTime date) {
     try {
       return _routineLogs.firstWhere((l) =>
           l.childId == childId &&
-          l.date.year == today.year &&
-          l.date.month == today.month &&
-          l.date.day == today.day);
+          l.date.year == date.year &&
+          l.date.month == date.month &&
+          l.date.day == date.day);
     } catch (_) {
       return null;
     }
+  }
+
+  ChildRoutineLog? getTodaysLog(String childId) =>
+      getLogForDate(childId, DateTime.now());
+
+  // ── School needs ───────────────────────────────────────────────────────────
+
+  /// Unresolved upcoming needs for a specific child.
+  List<ChildSchoolNeed> upcomingNeedsForChild(String childId) {
+    final today = DateTime.now();
+    return _schoolNeeds
+        .where((n) =>
+            n.childId == childId &&
+            !n.isResolved &&
+            !n.neededForDate.isBefore(DateTime(today.year, today.month, today.day)))
+        .toList()
+      ..sort((a, b) => a.neededForDate.compareTo(b.neededForDate));
+  }
+
+  /// All unresolved needs for tomorrow across all children.
+  List<ChildSchoolNeed> get needsForTomorrow {
+    final tom = DateTime.now().add(const Duration(days: 1));
+    return _schoolNeeds
+        .where((n) =>
+            !n.isResolved &&
+            n.neededForDate.year == tom.year &&
+            n.neededForDate.month == tom.month &&
+            n.neededForDate.day == tom.day)
+        .toList();
+  }
+
+  /// All unresolved needs for today (already needed / forgotten).
+  List<ChildSchoolNeed> get needsForToday {
+    final today = DateTime.now();
+    return _schoolNeeds
+        .where((n) =>
+            !n.isResolved &&
+            n.neededForDate.year == today.year &&
+            n.neededForDate.month == today.month &&
+            n.neededForDate.day == today.day)
+        .toList();
   }
 
   Future<void> loadData(String householdId) async {
@@ -208,6 +251,14 @@ class ChildProvider extends ChangeNotifier {
       }
     }
 
+    // School needs — local-only storage
+    final needsJson = prefs.getString('school_needs_$householdId');
+    if (needsJson != null) {
+      final List decoded = jsonDecode(needsJson);
+      _schoolNeeds =
+          decoded.map((e) => ChildSchoolNeed.fromJson(e)).toList();
+    }
+
     _isLoading = false;
     notifyListeners();
   }
@@ -235,6 +286,7 @@ class ChildProvider extends ChangeNotifier {
   Future<void> deleteChild(String childId, String householdId) async {
     _children.removeWhere((c) => c.id == childId);
     _routineLogs.removeWhere((l) => l.childId == childId);
+    _schoolNeeds.removeWhere((n) => n.childId == childId);
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('children_$householdId',
@@ -242,6 +294,36 @@ class ChildProvider extends ChangeNotifier {
     await prefs.setString('child_logs_$householdId',
         jsonEncode(_routineLogs.map((l) => l.toJson()).toList()));
     SyncService.deleteOne('app_children', childId);
+  }
+
+  // ── School needs CRUD ──────────────────────────────────────────────────────
+
+  Future<void> addSchoolNeed(
+      ChildSchoolNeed need, String householdId) async {
+    _schoolNeeds.add(need);
+    notifyListeners();
+    await _saveSchoolNeeds(householdId);
+  }
+
+  Future<void> markSchoolNeedResolved(
+      String needId, String householdId) async {
+    final i = _schoolNeeds.indexWhere((n) => n.id == needId);
+    if (i == -1) return;
+    _schoolNeeds[i] = _schoolNeeds[i].copyWith(isResolved: true);
+    notifyListeners();
+    await _saveSchoolNeeds(householdId);
+  }
+
+  Future<void> deleteSchoolNeed(String needId, String householdId) async {
+    _schoolNeeds.removeWhere((n) => n.id == needId);
+    notifyListeners();
+    await _saveSchoolNeeds(householdId);
+  }
+
+  Future<void> _saveSchoolNeeds(String householdId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('school_needs_$householdId',
+        jsonEncode(_schoolNeeds.map((n) => n.toJson()).toList()));
   }
 
   Future<void> updateRoutineLog(

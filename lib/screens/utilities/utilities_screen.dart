@@ -18,11 +18,29 @@ class UtilitiesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final canManageUtilities = auth.isOwner || auth.isHouseManager;
+
     return Scaffold(
       backgroundColor: AppColors.surfaceLight,
       appBar: AppBar(
         title: const Text('Utilities'),
       ),
+      floatingActionButton: canManageUtilities
+          ? FloatingActionButton.extended(
+              heroTag: 'utilities_screen_fab',
+              backgroundColor: AppColors.utilitiesOrange,
+              onPressed: () => showUtilitySetupPicker(context),
+              icon: const Icon(Icons.tune_outlined, color: Colors.white),
+              label: const Text(
+                'Set Up Utility',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          : null,
       body: const UtilitiesBody(),
     );
   }
@@ -170,6 +188,7 @@ class UtilitiesBody extends StatelessWidget {
         title: 'Rent',
         tracker: rent,
         child: const RentTabSection(embedded: true),
+        ownerOnly: true,
       ),
       _SectionEntry(
         icon: Icons.tv_outlined,
@@ -178,6 +197,10 @@ class UtilitiesBody extends StatelessWidget {
         child: const PayTvTabSection(embedded: true),
       ),
     ];
+
+    final customItems = utilProv.otherItems
+        .where((i) => isOwner || !i.isOwnerOnly)
+        .toList();
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -189,7 +212,7 @@ class UtilitiesBody extends StatelessWidget {
         ),
         for (final entry in sections)
           // Managers: hide owner-only sections entirely
-          if (isOwner || !(entry.tracker?.isOwnerOnly ?? false))
+          if (isOwner || (!entry.ownerOnly && !(entry.tracker?.isOwnerOnly ?? false)))
             _UtilSection(
               icon: entry.icon,
               title: entry.title,
@@ -198,6 +221,97 @@ class UtilitiesBody extends StatelessWidget {
               householdId: householdId,
               child: entry.child,
             ),
+        // Custom utilities
+        for (final item in customItems)
+          _UtilSection(
+            icon: Icons.add_circle_outline_rounded,
+            title: item.label,
+            tracker: item,
+            isOwner: isOwner,
+            householdId: householdId,
+            child: _CustomUtilityTabSection(
+              tracker: item,
+              householdId: householdId,
+            ),
+          ),
+        // Add custom utility button
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+          child: GestureDetector(
+            onTap: () => showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              shape: const RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (_) => ChangeNotifierProvider.value(
+                value: utilProv,
+                child: _AddCustomUtilitySheet(
+                  householdId: householdId,
+                ),
+              ),
+            ),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.primaryTeal.withValues(alpha: 0.35),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color:
+                          AppColors.primaryTeal.withValues(alpha: 0.10),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                      color: AppColors.primaryTeal,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add custom utility',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryTeal,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Security levy, borehole, generator fuel, school fees…',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textHint,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 40),
       ],
     );
@@ -332,6 +446,8 @@ class _UtilitiesAnalyticsSummary extends StatelessWidget {
         return item.rentDaysUntilDue;
       case UtilityType.payTv:
         return item.payTvDaysUntilDue;
+      case UtilityType.other:
+        return item.otherDaysUntilDue;
       default:
         return null;
     }
@@ -697,7 +813,7 @@ class _UtilitiesAnalyticsPanel extends StatelessWidget {
       case UtilityType.cookingGas:
         return !item.isLowAlert;
       case UtilityType.other:
-        return !item.isLowAlert;
+        return item.otherPaymentStatus == UtilityPaymentStatus.paid;
     }
   }
 
@@ -715,6 +831,8 @@ class _UtilitiesAnalyticsPanel extends StatelessWidget {
         return item.rentDaysUntilDue;
       case UtilityType.payTv:
         return item.payTvDaysUntilDue;
+      case UtilityType.other:
+        return item.otherDaysUntilDue;
       default:
         return null;
     }
@@ -744,6 +862,8 @@ class _UtilitiesAnalyticsPanel extends StatelessWidget {
         return item.rentAmount ?? 0;
       case UtilityType.payTv:
         return item.payTvMonthlyAmount ?? 0;
+      case UtilityType.other:
+        return item.otherMonthlyAmount ?? 0;
       default:
         return 0;
     }
@@ -957,11 +1077,13 @@ class _SectionEntry {
   final String title;
   final UtilityTracker? tracker;
   final Widget child;
+  final bool ownerOnly;
   const _SectionEntry(
       {required this.icon,
       required this.title,
       required this.tracker,
-      required this.child});
+      required this.child,
+      this.ownerOnly = false});
 }
 
 class _UtilSection extends StatelessWidget {
@@ -1349,6 +1471,420 @@ class _LogUtilityUsageSheetState extends State<_LogUtilityUsageSheet> {
       return 'Yesterday';
     }
     return '${d.day}/${d.month}/${d.year}';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CUSTOM UTILITY DISPLAY (other type)
+// ─────────────────────────────────────────────────────────────────
+class _CustomUtilityTabSection extends StatelessWidget {
+  final UtilityTracker tracker;
+  final String householdId;
+
+  const _CustomUtilityTabSection({
+    required this.tracker,
+    required this.householdId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isPaid =
+        tracker.otherPaymentStatus == UtilityPaymentStatus.paid;
+    final statusColor = isPaid ? AppColors.success : AppColors.warningAmber;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tracker.otherStatusMessage,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: statusColor,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (!isPaid)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        context.read<UtilityProvider>().markOtherPaid(
+                              tracker.id,
+                              householdId,
+                            ),
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Mark as paid'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.success,
+                      side: const BorderSide(color: AppColors.success),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        context.read<UtilityProvider>().resetOtherPayment(
+                              tracker.id,
+                              householdId,
+                            ),
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Reset for new cycle'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      side:
+                          const BorderSide(color: AppColors.divider),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  builder: (_) => ChangeNotifierProvider.value(
+                    value: context.read<UtilityProvider>(),
+                    child: _AddCustomUtilitySheet(
+                      householdId: householdId,
+                      existing: tracker,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Edit'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryTeal,
+                  side: BorderSide(
+                      color: AppColors.primaryTeal.withValues(alpha: 0.5)),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 10, horizontal: 16),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Delete utility?'),
+                      content: Text(
+                          'Remove "${tracker.label}" from your utilities list?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Delete',
+                              style: TextStyle(color: Colors.red)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true && context.mounted) {
+                    context
+                        .read<UtilityProvider>()
+                        .removeItem(tracker.id, householdId);
+                  }
+                },
+                icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                label: const Text('Delete'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accentOrange,
+                  side: BorderSide(
+                      color: AppColors.accentOrange.withValues(alpha: 0.4)),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 10, horizontal: 16),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ADD / EDIT CUSTOM UTILITY SHEET
+// ─────────────────────────────────────────────────────────────────
+class _AddCustomUtilitySheet extends StatefulWidget {
+  final String householdId;
+  final UtilityTracker? existing;
+
+  const _AddCustomUtilitySheet({
+    required this.householdId,
+    this.existing,
+  });
+
+  @override
+  State<_AddCustomUtilitySheet> createState() =>
+      _AddCustomUtilitySheetState();
+}
+
+class _AddCustomUtilitySheetState extends State<_AddCustomUtilitySheet> {
+  final _labelCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  final _dueDayCtrl = TextEditingController();
+  final _mpesaTillCtrl = TextEditingController();
+  final _accountRefCtrl = TextEditingController();
+  bool _saving = false;
+  bool _isPaybill = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    if (e != null) {
+      _labelCtrl.text = e.label;
+      if (e.otherMonthlyAmount != null) {
+        _amountCtrl.text = e.otherMonthlyAmount!.toStringAsFixed(0);
+      }
+      if (e.otherDueDayOfMonth != null) {
+        _dueDayCtrl.text = '${e.otherDueDayOfMonth}';
+      }
+      _mpesaTillCtrl.text = e.otherMpesaTill ?? '';
+      _isPaybill = e.otherIsPaybill;
+      _accountRefCtrl.text = e.otherMpesaAccountRef ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    _amountCtrl.dispose();
+    _dueDayCtrl.dispose();
+    _mpesaTillCtrl.dispose();
+    _accountRefCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final label = _labelCtrl.text.trim();
+    if (label.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a name for this utility.')),
+      );
+      return;
+    }
+    final amount = double.tryParse(_amountCtrl.text.trim());
+    final dueDay = int.tryParse(_dueDayCtrl.text.trim());
+
+    if (dueDay != null && (dueDay < 1 || dueDay > 28)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Due day must be between 1 and 28.')),
+      );
+      return;
+    }
+
+    final till = _mpesaTillCtrl.text.trim();
+    final accountRef = _accountRefCtrl.text.trim();
+    setState(() => _saving = true);
+
+    try {
+      final prov = context.read<UtilityProvider>();
+      if (widget.existing == null) {
+        await prov.addCustomUtility(
+          householdId: widget.householdId,
+          label: label,
+          monthlyAmount: amount,
+          dueDayOfMonth: dueDay,
+          mpesaTill: till.isNotEmpty ? till : null,
+          isPaybill: _isPaybill,
+          mpesaAccountRef: (_isPaybill && accountRef.isNotEmpty) ? accountRef : null,
+        );
+      } else {
+        await prov.setupOtherUtility(
+          itemId: widget.existing!.id,
+          householdId: widget.householdId,
+          label: label,
+          monthlyAmount: amount,
+          dueDayOfMonth: dueDay,
+          mpesaTill: till.isNotEmpty ? till : null,
+          isPaybill: _isPaybill,
+          mpesaAccountRef: (_isPaybill && accountRef.isNotEmpty) ? accountRef : null,
+        );
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to save. Please try again.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    isEdit ? 'Edit utility' : 'Add custom utility',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Track any recurring home expense not already listed above.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _labelCtrl,
+              textCapitalization: TextCapitalization.words,
+              autofocus: !isEdit,
+              decoration: const InputDecoration(
+                labelText: 'Utility name *',
+                hintText:
+                    'e.g. Security levy, Borehole, Generator fuel…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _amountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[0-9.]')),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Monthly amount (KSh)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _dueDayCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Due day of month',
+                      hintText: '1–28',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _mpesaTillCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              decoration: const InputDecoration(
+                labelText: 'M-Pesa till / paybill (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Checkbox(
+                  value: _isPaybill,
+                  onChanged: (v) => setState(() => _isPaybill = v ?? false),
+                  activeColor: AppColors.primaryTeal,
+                ),
+                const Text(
+                  'This is a Paybill number',
+                  style: TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            if (_isPaybill) ...
+              [
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _accountRefCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Account number',
+                    hintText: 'e.g. 001234',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryTeal,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        isEdit ? 'Save changes' : 'Add utility',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

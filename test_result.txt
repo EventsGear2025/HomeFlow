@@ -1,0 +1,806 @@
+Resolving dependencies...
+Downloading packages...
+  app_links 6.4.1 (7.0.0 available)
+  async 2.13.0 (2.13.1 available)
+  badges 3.1.2 (3.2.0 available)
+  cupertino_icons 1.0.8 (1.0.9 available)
+  dart_jsonwebtoken 3.4.0 (3.4.1 available)
+  flutter_svg 2.2.3 (2.3.0 available)
+  go_router 17.0.0 (17.2.3 available)
+  google_fonts 6.3.2 (8.1.0 available)
+  gotrue 2.18.0 (2.20.0 available)
+  gtk 2.1.0 (2.2.0 available)
+  matcher 0.12.19 (0.12.20 available)
+  meta 1.17.0 (1.18.2 available)
+  path_provider_android 2.2.19 (2.3.1 available)
+  path_provider_foundation 2.4.2 (2.6.0 available)
+  postgrest 2.6.0 (2.7.0 available)
+  realtime_client 2.7.0 (2.7.3 available)
+  shared_preferences 2.5.3 (2.5.5 available)
+  shared_preferences_android 2.4.13 (2.4.23 available)
+  shared_preferences_foundation 2.5.4 (2.5.6 available)
+  shared_preferences_platform_interface 2.4.1 (2.4.2 available)
+  source_span 1.10.1 (1.10.2 available)
+  storage_client 2.4.1 (2.5.2 available)
+  supabase 2.10.2 (2.10.6 available)
+  supabase_flutter 2.12.0 (2.12.4 available)
+  test_api 0.7.10 (0.7.12 available)
+  url_launcher_android 6.3.20 (6.3.29 available)
+  url_launcher_ios 6.3.4 (6.4.1 available)
+  url_launcher_macos 3.2.3 (3.2.5 available)
+  url_launcher_web 2.4.1 (2.4.3 available)
+  vector_graphics 1.1.19 (1.2.1 available)
+  vector_graphics_compiler 1.1.19 (1.2.2 available)
+  vector_math 2.2.0 (2.3.0 available)
+  vm_service 15.0.0 (15.2.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+34 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/macbookpro2/myapp/test/widget_test.dart
+00:00 +0: manager role values map correctly
+00:00 +1: owner signup skips OTP when session is immediate
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown building DashboardScreen(dirty, dependencies:
+[_InheritedProviderScope<AuthProvider?>]):
+Error: Could not find the correct Provider<SupplyProvider> above this DashboardScreen Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that DashboardScreen is under your MultiProvider/Provider<SupplyProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+The relevant error-causing widget was:
+  DashboardScreen DashboardScreen:file:///Users/macbookpro2/myapp/lib/screens/main_shell.dart:40:5
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      WatchContext.watch (package:provider/src/provider.dart:727:21)
+#3      DashboardScreen.build (package:homeflow/screens/dashboard/dashboard_screen.dart:44:28)
+#4      StatelessElement.build (package:flutter/src/widgets/framework.dart:5889:49)
+#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5817:15)
+#6      Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#7      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:5799:5)
+#8      ComponentElement.mount (package:flutter/src/widgets/framework.dart:5793:5)
+...     Normal element mounting (39 frames)
+#47     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#48     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#49     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (31 frames)
+#80     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#81     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#82     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (105 frames)
+#187    Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#188    Element.updateChild (package:flutter/src/widgets/framework.dart:4053:20)
+#189    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#190    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#191    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#192    BuildScope._tryRebuild (package:flutter/src/widgets/framework.dart:2750:15)
+#193    BuildScope._flushDirtyElements (package:flutter/src/widgets/framework.dart:2807:11)
+#194    BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3111:18)
+#195    AutomatedTestWidgetsFlutterBinding.drawFrame (package:flutter_test/src/binding.dart:2131:19)
+#196    RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
+#197    SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#198    SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
+#199    AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#202    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#203    AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#204    WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:719:23)
+<asynchronous suspension>
+#205    TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#206    main.<anonymous closure> (file:///Users/macbookpro2/myapp/test/widget_test.dart:36:5)
+<asynchronous suspension>
+#207    testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#208    TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown building SuppliesScreen(dirty, state:
+_SuppliesScreenState#d9c81(ticker inactive)):
+Error: Could not find the correct Provider<SupplyProvider> above this SuppliesScreen Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that SuppliesScreen is under your MultiProvider/Provider<SupplyProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+The relevant error-causing widget was:
+  SuppliesScreen SuppliesScreen:file:///Users/macbookpro2/myapp/lib/screens/main_shell.dart:41:11
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      WatchContext.watch (package:provider/src/provider.dart:727:21)
+#3      _SuppliesScreenState.build (package:homeflow/screens/supplies/supplies_screen.dart:328:28)
+#4      StatefulElement.build (package:flutter/src/widgets/framework.dart:5931:27)
+#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5817:15)
+#6      StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#7      Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#8      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:5799:5)
+#9      StatefulElement._firstBuild (package:flutter/src/widgets/framework.dart:5973:11)
+#10     ComponentElement.mount (package:flutter/src/widgets/framework.dart:5793:5)
+...     Normal element mounting (39 frames)
+#49     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#50     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#51     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (31 frames)
+#82     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#83     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#84     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (105 frames)
+#189    Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#190    Element.updateChild (package:flutter/src/widgets/framework.dart:4053:20)
+#191    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#192    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#193    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#194    BuildScope._tryRebuild (package:flutter/src/widgets/framework.dart:2750:15)
+#195    BuildScope._flushDirtyElements (package:flutter/src/widgets/framework.dart:2807:11)
+#196    BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3111:18)
+#197    AutomatedTestWidgetsFlutterBinding.drawFrame (package:flutter_test/src/binding.dart:2131:19)
+#198    RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
+#199    SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#200    SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
+#201    AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#204    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#205    AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#206    WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:719:23)
+<asynchronous suspension>
+#207    TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#208    main.<anonymous closure> (file:///Users/macbookpro2/myapp/test/widget_test.dart:36:5)
+<asynchronous suspension>
+#209    testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#210    TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown building ShoppingScreen(dirty, state:
+_ShoppingScreenState#0cee4(ticker inactive)):
+Error: Could not find the correct Provider<SupplyProvider> above this ShoppingScreen Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that ShoppingScreen is under your MultiProvider/Provider<SupplyProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+The relevant error-causing widget was:
+  ShoppingScreen ShoppingScreen:file:///Users/macbookpro2/myapp/lib/screens/main_shell.dart:42:11
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      WatchContext.watch (package:provider/src/provider.dart:727:21)
+#3      _ShoppingScreenState.build (package:homeflow/screens/shopping/shopping_screen.dart:77:28)
+#4      StatefulElement.build (package:flutter/src/widgets/framework.dart:5931:27)
+#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5817:15)
+#6      StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#7      Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#8      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:5799:5)
+#9      StatefulElement._firstBuild (package:flutter/src/widgets/framework.dart:5973:11)
+#10     ComponentElement.mount (package:flutter/src/widgets/framework.dart:5793:5)
+...     Normal element mounting (39 frames)
+#49     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#50     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#51     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (31 frames)
+#82     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#83     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#84     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (105 frames)
+#189    Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#190    Element.updateChild (package:flutter/src/widgets/framework.dart:4053:20)
+#191    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#192    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#193    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#194    BuildScope._tryRebuild (package:flutter/src/widgets/framework.dart:2750:15)
+#195    BuildScope._flushDirtyElements (package:flutter/src/widgets/framework.dart:2807:11)
+#196    BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3111:18)
+#197    AutomatedTestWidgetsFlutterBinding.drawFrame (package:flutter_test/src/binding.dart:2131:19)
+#198    RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
+#199    SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#200    SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
+#201    AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#204    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#205    AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#206    WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:719:23)
+<asynchronous suspension>
+#207    TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#208    main.<anonymous closure> (file:///Users/macbookpro2/myapp/test/widget_test.dart:36:5)
+<asynchronous suspension>
+#209    testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#210    TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown building LaundryScreen(dirty, state:
+_LaundryScreenState#ff6d6(ticker inactive)):
+Error: Could not find the correct Provider<LaundryProvider> above this LaundryScreen Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that LaundryScreen is under your MultiProvider/Provider<LaundryProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+The relevant error-causing widget was:
+  LaundryScreen LaundryScreen:file:///Users/macbookpro2/myapp/lib/screens/main_shell.dart:43:11
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      WatchContext.watch (package:provider/src/provider.dart:727:21)
+#3      _LaundryScreenState.build (package:homeflow/screens/laundry/laundry_screen.dart:38:29)
+#4      StatefulElement.build (package:flutter/src/widgets/framework.dart:5931:27)
+#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5817:15)
+#6      StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#7      Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#8      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:5799:5)
+#9      StatefulElement._firstBuild (package:flutter/src/widgets/framework.dart:5973:11)
+#10     ComponentElement.mount (package:flutter/src/widgets/framework.dart:5793:5)
+...     Normal element mounting (39 frames)
+#49     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#50     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#51     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (31 frames)
+#82     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#83     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#84     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (105 frames)
+#189    Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#190    Element.updateChild (package:flutter/src/widgets/framework.dart:4053:20)
+#191    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#192    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#193    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#194    BuildScope._tryRebuild (package:flutter/src/widgets/framework.dart:2750:15)
+#195    BuildScope._flushDirtyElements (package:flutter/src/widgets/framework.dart:2807:11)
+#196    BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3111:18)
+#197    AutomatedTestWidgetsFlutterBinding.drawFrame (package:flutter_test/src/binding.dart:2131:19)
+#198    RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
+#199    SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#200    SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
+#201    AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#204    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#205    AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#206    WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:719:23)
+<asynchronous suspension>
+#207    TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#208    main.<anonymous closure> (file:///Users/macbookpro2/myapp/test/widget_test.dart:36:5)
+<asynchronous suspension>
+#209    testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#210    TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown building KidsScreen(dirty, state:
+_KidsScreenState#3ebb1):
+Error: Could not find the correct Provider<ChildProvider> above this KidsScreen Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that KidsScreen is under your MultiProvider/Provider<ChildProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+The relevant error-causing widget was:
+  KidsScreen KidsScreen:file:///Users/macbookpro2/myapp/lib/screens/main_shell.dart:45:11
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      WatchContext.watch (package:provider/src/provider.dart:727:21)
+#3      _KidsScreenState.build (package:homeflow/screens/kids/kids_screen.dart:53:35)
+#4      StatefulElement.build (package:flutter/src/widgets/framework.dart:5931:27)
+#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5817:15)
+#6      StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#7      Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#8      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:5799:5)
+#9      StatefulElement._firstBuild (package:flutter/src/widgets/framework.dart:5973:11)
+#10     ComponentElement.mount (package:flutter/src/widgets/framework.dart:5793:5)
+...     Normal element mounting (39 frames)
+#49     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#50     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#51     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (31 frames)
+#82     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#83     MultiChildRenderObjectElement.inflateWidget (package:flutter/src/widgets/framework.dart:7264:36)
+#84     MultiChildRenderObjectElement.mount (package:flutter/src/widgets/framework.dart:7279:32)
+...     Normal element mounting (105 frames)
+#189    Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#190    Element.updateChild (package:flutter/src/widgets/framework.dart:4053:20)
+#191    ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5841:16)
+#192    StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5982:11)
+#193    Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#194    BuildScope._tryRebuild (package:flutter/src/widgets/framework.dart:2750:15)
+#195    BuildScope._flushDirtyElements (package:flutter/src/widgets/framework.dart:2807:11)
+#196    BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3111:18)
+#197    AutomatedTestWidgetsFlutterBinding.drawFrame (package:flutter_test/src/binding.dart:2131:19)
+#198    RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
+#199    SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#200    SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
+#201    AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#204    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#205    AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#206    WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:719:23)
+<asynchronous suspension>
+#207    TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#208    main.<anonymous closure> (file:///Users/macbookpro2/myapp/test/widget_test.dart:36:5)
+<asynchronous suspension>
+#209    testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#210    TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown building _DailyLogTab(dirty):
+Error: Could not find the correct Provider<MealProvider> above this _DailyLogTab Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that _DailyLogTab is under your MultiProvider/Provider<MealProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+The relevant error-causing widget was:
+  _DailyLogTab _DailyLogTab:file:///Users/macbookpro2/myapp/lib/screens/meals/meals_screen.dart:117:11
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      WatchContext.watch (package:provider/src/provider.dart:727:21)
+#3      _DailyLogTab.build (package:homeflow/screens/meals/meals_screen.dart:210:27)
+#4      StatelessElement.build (package:flutter/src/widgets/framework.dart:5889:49)
+#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5817:15)
+#6      Element.rebuild (package:flutter/src/widgets/framework.dart:5529:7)
+#7      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:5799:5)
+#8      ComponentElement.mount (package:flutter/src/widgets/framework.dart:5793:5)
+...     Normal element mounting (50 frames)
+#58     Element.inflateWidget (package:flutter/src/widgets/framework.dart:4587:20)
+#59     Element.updateChild (package:flutter/src/widgets/framework.dart:4059:18)
+#60     SliverMultiBoxAdaptorElement.updateChild (package:flutter/src/widgets/sliver.dart:1086:37)
+#61     SliverMultiBoxAdaptorElement.createChild.<anonymous closure> (package:flutter/src/widgets/sliver.dart:1071:20)
+#62     BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3101:19)
+#63     SliverMultiBoxAdaptorElement.createChild (package:flutter/src/widgets/sliver.dart:1061:12)
+#64     RenderSliverMultiBoxAdaptor._createOrObtainChild.<anonymous closure> (package:flutter/src/rendering/sliver_multi_box_adaptor.dart:368:23)
+#65     RenderObject.invokeLayoutCallback.<anonymous closure> (package:flutter/src/rendering/object.dart:2887:17)
+#66     PipelineOwner._enableMutationsToDirtySubtrees (package:flutter/src/rendering/object.dart:1223:15)
+#67     RenderObject.invokeLayoutCallback (package:flutter/src/rendering/object.dart:2886:14)
+#68     RenderSliverMultiBoxAdaptor._createOrObtainChild (package:flutter/src/rendering/sliver_multi_box_adaptor.dart:357:5)
+#69     RenderSliverMultiBoxAdaptor.addInitialChild (package:flutter/src/rendering/sliver_multi_box_adaptor.dart:455:5)
+#70     RenderSliverFixedExtentBoxAdaptor.performLayout (package:flutter/src/rendering/sliver_fixed_extent_list.dart:319:12)
+#71     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#72     RenderSliverEdgeInsetsPadding.performLayout (package:flutter/src/rendering/sliver_padding.dart:133:12)
+#73     _RenderSliverFractionalPadding.performLayout (package:flutter/src/widgets/sliver_fill.dart:162:11)
+#74     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#75     RenderViewportBase.layoutChildSequence (package:flutter/src/rendering/viewport.dart:673:13)
+#76     RenderViewport._attemptLayout (package:flutter/src/rendering/viewport.dart:1684:12)
+#77     RenderViewport.performLayout (package:flutter/src/rendering/viewport.dart:1575:20)
+#78     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#79     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#80     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#81     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#82     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#83     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#84     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#85     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#86     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#87     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#88     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#89     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#90     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#91     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#92     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#93     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#94     _RenderCustomClip.performLayout (package:flutter/src/rendering/proxy_box.dart:1549:11)
+#95     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#96     MultiChildLayoutDelegate.layoutChild (package:flutter/src/rendering/custom_layout.dart:180:12)
+#97     _ScaffoldLayout.performLayout (package:flutter/src/material/scaffold.dart:1113:7)
+#98     MultiChildLayoutDelegate._callPerformLayout (package:flutter/src/rendering/custom_layout.dart:246:7)
+#99     RenderCustomMultiChildLayoutBox.performLayout (package:flutter/src/rendering/custom_layout.dart:417:14)
+#100    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#101    RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#102    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#103    RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#104    _RenderCustomClip.performLayout (package:flutter/src/rendering/proxy_box.dart:1549:11)
+#105    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#106    RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#107    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#108    RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#109    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#110    ChildLayoutHelper.layoutChild (package:flutter/src/rendering/layout_helper.dart:62:11)
+#111    RenderStack._computeSize (package:flutter/src/rendering/stack.dart:645:43)
+#112    RenderStack.performLayout (package:flutter/src/rendering/stack.dart:680:12)
+#113    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#114    MultiChildLayoutDelegate.layoutChild (package:flutter/src/rendering/custom_layout.dart:180:12)
+#115    _ScaffoldLayout.performLayout (package:flutter/src/material/scaffold.dart:1113:7)
+#116    MultiChildLayoutDelegate._callPerformLayout (package:flutter/src/rendering/custom_layout.dart:246:7)
+#117    RenderCustomMultiChildLayoutBox.performLayout (package:flutter/src/rendering/custom_layout.dart:417:14)
+#118    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#119    RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#120    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#121    RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#122    _RenderCustomClip.performLayout (package:flutter/src/rendering/proxy_box.dart:1549:11)
+#123    RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
+#124    RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
+#125    RenderObject._layoutWithoutResize (package:flutter/src/rendering/object.dart:2616:7)
+#126    PipelineOwner.flushLayout (package:flutter/src/rendering/object.dart:1174:18)
+#127    PipelineOwner.flushLayout (package:flutter/src/rendering/object.dart:1187:15)
+#128    AutomatedTestWidgetsFlutterBinding.drawFrame (package:flutter_test/src/binding.dart:2133:27)
+#129    RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
+#130    SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#131    SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
+#132    AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#135    TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#136    AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#137    WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:719:23)
+<asynchronous suspension>
+#138    TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#139    main.<anonymous closure> (file:///Users/macbookpro2/myapp/test/widget_test.dart:36:5)
+<asynchronous suspension>
+#140    testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#141    TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY SCHEDULER LIBRARY ╞═════════════════════════════════════════════════════════
+The following ProviderNotFoundException was thrown during a scheduler callback:
+Error: Could not find the correct Provider<PriceCompareProvider> above this ShoppingScreen Widget
+
+This happens because you used a `BuildContext` that does not include the provider
+of your choice. There are a few common scenarios:
+
+- You added a new provider in your `main.dart` and performed a hot-reload.
+  To fix, perform a hot-restart.
+
+- The provider you are trying to read is in a different route.
+
+  Providers are "scoped". So if you insert of provider inside a route, then
+  other routes will not be able to access that provider.
+
+- You used a `BuildContext` that is an ancestor of the provider you are trying to read.
+
+  Make sure that ShoppingScreen is under your MultiProvider/Provider<PriceCompareProvider>.
+  This usually happens when you are creating a provider and trying to read it immediately.
+
+  For example, instead of:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // Will throw a ProviderNotFoundError, because `context` is associated
+      // to the widget that is the parent of `Provider<Example>`
+      child: Text(context.watch<Example>().toString()),
+    );
+  }
+  ```
+
+  consider using `builder` like so:
+
+  ```
+  Widget build(BuildContext context) {
+    return Provider<Example>(
+      create: (_) => Example(),
+      // we use `builder` to obtain a new `BuildContext` that has access to the provider
+      builder: (context, child) {
+        // No longer throws
+        return Text(context.watch<Example>().toString());
+      }
+    );
+  }
+  ```
+
+If none of these solutions work, consider asking for help on StackOverflow:
+https://stackoverflow.com/questions/tagged/flutter
+
+When the exception was thrown, this was the stack:
+#0      Provider._inheritedElementOf (package:provider/src/provider.dart:377:7)
+#1      Provider.of (package:provider/src/provider.dart:327:30)
+#2      ReadContext.read (package:provider/src/provider.dart:683:21)
+#3      _ShoppingScreenState.initState.<anonymous closure> (package:homeflow/screens/shopping/shopping_screen.dart:43:15)
+#4      SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+#5      SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1357:11)
+#6      AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1960:9)
+#9      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:74:41)
+#10     AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1949:27)
+#11     WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:719:23)
+<asynchronous suspension>
+#12     TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#13     main.<anonymous closure> (file:///Users/macbookpro2/myapp/test/widget_test.dart:36:5)
+<asynchronous suspension>
+#14     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#15     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following message was thrown:
+Multiple exceptions (7) were detected during the running of the current test, and at least one was
+unexpected.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +1 -1: owner signup skips OTP when session is immediate [E]
+  Test failed. See exception logs above.
+  The test description was: owner signup skips OTP when session is immediate
+  
+00:01 +1 -1: manager signup routes to manager OTP when confirmation is required
+00:01 +2 -1: Some tests failed.
