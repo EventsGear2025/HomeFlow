@@ -7,8 +7,21 @@ import '../models/user_model.dart';
 import 'supabase_service.dart';
 
 class SupabaseAuthService {
+  static const int signupResendCooldownSeconds = 60;
+  static const String resendRateLimitMessage =
+      'We recently sent a verification code. Please wait about a minute, then try again.';
+
   static String? _cachedAdminAccessUserId;
   static bool? _cachedAdminAccess;
+
+  static bool isRateLimitError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('rate limit') ||
+        message.contains('too many requests') ||
+        message.contains('security purposes') ||
+        message.contains('request this after') ||
+        message.contains('429');
+  }
 
   Session? get currentSession {
     try {

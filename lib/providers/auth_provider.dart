@@ -784,10 +784,18 @@ class AuthProvider extends ChangeNotifier {
       final identities = resp.user?.identities;
       if (identities != null && identities.isEmpty) {
         debugPrint('[signUpOwner] User already exists, resending OTP');
-        await Supabase.instance.client.auth.resend(
-          type: OtpType.signup,
-          email: normalizedEmail,
-        ).timeout(const Duration(seconds: 10));
+        try {
+          await _supabaseAuthService
+              .resendOtp(email: normalizedEmail)
+              .timeout(const Duration(seconds: 10));
+        } catch (error) {
+          if (!SupabaseAuthService.isRateLimitError(error)) {
+            rethrow;
+          }
+          debugPrint(
+            '[signUpOwner] Resend rate-limited, continuing to OTP screen',
+          );
+        }
       }
     } catch (e) {
       debugPrint('[signUpOwner] error: $e');
@@ -834,10 +842,18 @@ class AuthProvider extends ChangeNotifier {
       final identities = resp.user?.identities;
       if (identities != null && identities.isEmpty) {
         debugPrint('[signUpAdditionalHomeownerPreStep] User already exists, resending OTP');
-        await Supabase.instance.client.auth.resend(
-          type: OtpType.signup,
-          email: normalizedEmail,
-        ).timeout(const Duration(seconds: 10));
+        try {
+          await _supabaseAuthService
+              .resendOtp(email: normalizedEmail)
+              .timeout(const Duration(seconds: 10));
+        } catch (error) {
+          if (!SupabaseAuthService.isRateLimitError(error)) {
+            rethrow;
+          }
+          debugPrint(
+            '[signUpAdditionalHomeownerPreStep] Resend rate-limited, continuing to OTP screen',
+          );
+        }
       }
     } catch (e) {
       debugPrint('[signUpAdditionalHomeownerPreStep] error: $e');
@@ -1042,10 +1058,18 @@ class AuthProvider extends ChangeNotifier {
       final identities = resp.user?.identities;
       if (identities != null && identities.isEmpty) {
         debugPrint('[signUpManagerPreStep] User already exists, resending OTP');
-        await Supabase.instance.client.auth.resend(
-          type: OtpType.signup,
-          email: normalizedEmail,
-        ).timeout(const Duration(seconds: 10));
+        try {
+          await _supabaseAuthService
+              .resendOtp(email: normalizedEmail)
+              .timeout(const Duration(seconds: 10));
+        } catch (error) {
+          if (!SupabaseAuthService.isRateLimitError(error)) {
+            rethrow;
+          }
+          debugPrint(
+            '[signUpManagerPreStep] Resend rate-limited, continuing to OTP screen',
+          );
+        }
       }
 
       // Do not join the household until OTP verification succeeds.
@@ -1344,6 +1368,9 @@ class AuthProvider extends ChangeNotifier {
     }
     if (msg.contains('Invalid email')) {
       return 'Please enter a valid email address.';
+    }
+    if (SupabaseAuthService.isRateLimitError(e)) {
+      return SupabaseAuthService.resendRateLimitMessage;
     }
     // Fallback — strip the "Exception:" prefix Flutter adds
     return msg.replaceFirst('Exception: ', '');

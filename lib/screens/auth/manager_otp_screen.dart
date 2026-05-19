@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../services/supabase_auth_service.dart';
 import '../../utils/app_colors.dart';
 import '../main_shell.dart';
 
@@ -36,7 +37,7 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
   @override
   void initState() {
     super.initState();
-    _resendCooldown = 30;
+    _resendCooldown = SupabaseAuthService.signupResendCooldownSeconds;
     _startCooldown();
   }
 
@@ -111,26 +112,44 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
   }
 
   Future<void> _resend() async {
-    if (_resendCooldown > 0) return;
+    if (_resendCooldown > 0 || _resending) return;
     setState(() => _resending = true);
     try {
       final normalizedEmail = widget.email.trim().toLowerCase();
-      await Supabase.instance.client.auth.resend(
-        type: OtpType.signup,
-        email: normalizedEmail,
-      );
+      await SupabaseAuthService().resendOtp(email: normalizedEmail);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('A new code has been sent to your email.')),
       );
       setState(() {
         _codeExpired = false;
-        _resendCooldown = 30;
+        _resendCooldown = SupabaseAuthService.signupResendCooldownSeconds;
       });
       _startCooldown();
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      if (SupabaseAuthService.isRateLimitError(e)) {
+        setState(
+          () => _resendCooldown =
+              SupabaseAuthService.signupResendCooldownSeconds,
+        );
+        _startCooldown();
+        _showError(SupabaseAuthService.resendRateLimitMessage);
+      } else {
+        _showError(e.message);
+      }
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not resend the code. Please try again.');
+      if (SupabaseAuthService.isRateLimitError(e)) {
+        setState(
+          () => _resendCooldown =
+              SupabaseAuthService.signupResendCooldownSeconds,
+        );
+        _startCooldown();
+        _showError(SupabaseAuthService.resendRateLimitMessage);
+      } else {
+        _showError('Could not resend the code. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _resending = false);
     }

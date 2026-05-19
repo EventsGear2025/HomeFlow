@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../services/supabase_auth_service.dart';
 import '../../utils/app_colors.dart';
 import '../main_shell.dart';
 
@@ -40,7 +41,7 @@ class _OtpScreenState extends State<OtpScreen> {
   bool _verifying = false;
   bool _resending = false;
   bool _codeExpired = false;
-  int _resendCooldown = 30;
+  int _resendCooldown = SupabaseAuthService.signupResendCooldownSeconds;
 
   bool get _isJoiningExistingHousehold =>
       widget.homeownerInviteCode?.trim().isNotEmpty == true;
@@ -159,8 +160,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _resending = true);
 
     try {
-      await Supabase.instance.client.auth.resend(
-        type: OtpType.signup,
+      await SupabaseAuthService().resendOtp(
         email: widget.email.trim().toLowerCase(),
       );
       if (!mounted) return;
@@ -171,12 +171,33 @@ class _OtpScreenState extends State<OtpScreen> {
       );
       setState(() {
         _codeExpired = false;
-        _resendCooldown = 30;
+        _resendCooldown = SupabaseAuthService.signupResendCooldownSeconds;
       });
       _startCooldown();
-    } catch (_) {
+    } on AuthException catch (e) {
       if (!mounted) return;
-      _showError('Could not resend the code. Please try again.');
+      if (SupabaseAuthService.isRateLimitError(e)) {
+        setState(
+          () => _resendCooldown =
+              SupabaseAuthService.signupResendCooldownSeconds,
+        );
+        _startCooldown();
+        _showError(SupabaseAuthService.resendRateLimitMessage);
+      } else {
+        _showError(e.message);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (SupabaseAuthService.isRateLimitError(e)) {
+        setState(
+          () => _resendCooldown =
+              SupabaseAuthService.signupResendCooldownSeconds,
+        );
+        _startCooldown();
+        _showError(SupabaseAuthService.resendRateLimitMessage);
+      } else {
+        _showError('Could not resend the code. Please try again.');
+      }
     } finally {
       if (mounted) {
         setState(() => _resending = false);
