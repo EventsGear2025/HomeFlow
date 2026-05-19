@@ -7,7 +7,6 @@ import '../models/user_model.dart';
 import '../models/household_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_auth_service.dart';
-import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_constants.dart';
 

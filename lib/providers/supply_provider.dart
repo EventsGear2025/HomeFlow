@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 import '../models/supply_item.dart';
 import '../models/shopping_request.dart';
 import '../services/sync_service.dart';
-import '../utils/app_constants.dart';
 
 class SupplyProvider extends ChangeNotifier {
   List<SupplyItem> _supplies = [];
@@ -38,13 +36,14 @@ class SupplyProvider extends ChangeNotifier {
   /// Owners see everything; house managers see only non-owner-only items.
   List<SupplyItem> visibleSupplies({required bool isOwner}) =>
       isOwner ? _supplies : _supplies.where((s) => !s.isOwnerOnly).toList();
+
   List<ShoppingRequest> get shoppingRequests => _shoppingRequests;
   bool get isLoading => _isLoading;
 
-    bool hasActiveRequestForSupply(String supplyId) => _shoppingRequests.any(
-      (request) =>
-        request.supplyItemId == supplyId &&
-        _isActiveRequest(request),
+  bool hasActiveRequestForSupply(String supplyId) => _shoppingRequests.any(
+        (request) =>
+            request.supplyItemId == supplyId &&
+            _isActiveRequest(request),
       );
 
   List<SupplyItem> lowStockItems({required bool isOwner}) => _supplies
@@ -153,26 +152,6 @@ class SupplyProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
-  }
-
-  Future<void> _seedStarterSupplies(
-      String householdId, SharedPreferences prefs) async {
-    const uuid = Uuid();
-    _supplies = AppConstants.starterSupplies.map((item) {
-      final isGas = item['name'].toString().contains('Gas');
-      return SupplyItem(
-        id: uuid.v4(),
-        householdId: householdId,
-        name: item['name'],
-        category: item['category'],
-        unitType: item['unit'],
-        status: SupplyStatus.enough,
-        isGas: isGas,
-        expectedDurationDays: isGas ? 42 : null,
-      );
-    }).toList();
-
-    await _saveSupplies(householdId, prefs);
   }
 
   Future<void> updateSupplyStatus(
