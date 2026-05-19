@@ -151,9 +151,13 @@ class SupabaseAuthService {
   }
 
   Future<void> signInWithGoogle() async {
+    final redirectUri = kIsWeb
+        ? Uri.base.resolve('/').toString()
+        : 'com.example.myapp://login-callback/';
+
     await SupabaseService.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: 'com.example.myapp://login-callback/',
+      redirectTo: redirectUri,
     );
   }
 

@@ -8177,6 +8177,16 @@ class _SupplyCard extends StatelessWidget {
                       if (s == SupplyStatus.runningLow ||
                           s == SupplyStatus.veryLow ||
                           s == SupplyStatus.finished) {
+                        if (supply.hasActiveRequestForSupply(item.id)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '${item.name} is already on an active shopping list.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         _showAddToShoppingDialog(context, item, auth);
                       }
                     },
@@ -8223,12 +8233,12 @@ class _SupplyCard extends StatelessWidget {
                 (item.statusUpdatedAt == null ||
                     lastLog.date.isAfter(item.statusUpdatedAt!));
             String? line;
-            if (useLog && lastLog != null) {
+            if (useLog) {
               final who = lastLog.loggedByName != null
                   ? 'By ${lastLog.loggedByName}'
                   : null;
               line = [
-                if (who != null) who,
+                ?who,
                 'Logged ${_formatDateTime(lastLog.date)}',
               ].join(' · ');
             } else if (item.statusUpdatedAt != null) {
@@ -8236,7 +8246,7 @@ class _SupplyCard extends StatelessWidget {
                   ? 'By ${item.statusUpdatedByName}'
                   : null;
               line = [
-                if (who != null) who,
+                ?who,
                 'Updated ${_formatDateTime(item.statusUpdatedAt!)}',
               ].join(' · ');
             }

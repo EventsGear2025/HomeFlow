@@ -131,6 +131,7 @@ class ShoppingRequest {
   ShoppingRequest copyWith({
     String? itemName,
     String? quantity,
+    ShoppingUrgency? urgency,
     String? notes,
     ShoppingStatus? status,
     String? approvedByUserId,
@@ -145,7 +146,7 @@ class ShoppingRequest {
         itemName: itemName ?? this.itemName,
         quantity: quantity ?? this.quantity,
         category: category,
-        urgency: urgency,
+        urgency: urgency ?? this.urgency,
         notes: notes ?? this.notes,
         status: status ?? this.status,
         purchaseType: purchaseType,

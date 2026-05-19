@@ -12,6 +12,26 @@ class SupplyProvider extends ChangeNotifier {
   List<ShoppingRequest> _shoppingRequests = [];
   bool _isLoading = false;
 
+  bool _isActiveRequest(ShoppingRequest request) =>
+      request.status != ShoppingStatus.purchased &&
+      request.status != ShoppingStatus.deferred;
+
+  int _urgencyRank(ShoppingUrgency urgency) {
+    switch (urgency) {
+      case ShoppingUrgency.neededSoon:
+        return 0;
+      case ShoppingUrgency.neededToday:
+        return 1;
+      case ShoppingUrgency.critical:
+        return 2;
+    }
+  }
+
+  ShoppingUrgency _higherUrgency(
+    ShoppingUrgency first,
+    ShoppingUrgency second,
+  ) => _urgencyRank(first) >= _urgencyRank(second) ? first : second;
+
   List<SupplyItem> get supplies => _supplies;
 
   /// Returns supplies visible to the current user.
@@ -20,6 +40,12 @@ class SupplyProvider extends ChangeNotifier {
       isOwner ? _supplies : _supplies.where((s) => !s.isOwnerOnly).toList();
   List<ShoppingRequest> get shoppingRequests => _shoppingRequests;
   bool get isLoading => _isLoading;
+
+    bool hasActiveRequestForSupply(String supplyId) => _shoppingRequests.any(
+      (request) =>
+        request.supplyItemId == supplyId &&
+        _isActiveRequest(request),
+      );
 
   List<SupplyItem> lowStockItems({required bool isOwner}) => _supplies
       .where((s) => s.needsAttention && (isOwner || !s.isOwnerOnly))
@@ -31,10 +57,7 @@ class SupplyProvider extends ChangeNotifier {
   /// request are excluded to prevent the same item appearing twice in Buy Now.
   List<SupplyItem> finishedSupplies({required bool isOwner}) {
     final activeRequestedSupplyIds = _shoppingRequests
-        .where((r) =>
-            r.supplyItemId != null &&
-            r.status != ShoppingStatus.purchased &&
-            r.status != ShoppingStatus.deferred)
+      .where((r) => r.supplyItemId != null && _isActiveRequest(r))
         .map((r) => r.supplyItemId!)
         .toSet();
 
@@ -179,7 +202,26 @@ class SupplyProvider extends ChangeNotifier {
 
   Future<void> addShoppingRequest(
       ShoppingRequest request, String householdId) async {
-    _shoppingRequests.insert(0, request);
+    final existingIndex = request.supplyItemId == null
+        ? -1
+        : _shoppingRequests.indexWhere(
+            (current) =>
+                current.supplyItemId == request.supplyItemId &&
+                _isActiveRequest(current),
+          );
+
+    if (existingIndex != -1) {
+      final existing = _shoppingRequests[existingIndex];
+      _shoppingRequests[existingIndex] = existing.copyWith(
+        itemName: request.itemName,
+        quantity: request.quantity,
+        urgency: _higherUrgency(existing.urgency, request.urgency),
+        notes: request.notes ?? existing.notes,
+      );
+    } else {
+      _shoppingRequests.insert(0, request);
+    }
+
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await _saveRequests(householdId, prefs);

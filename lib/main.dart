@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'admin/admin_panel_screen.dart';
@@ -17,6 +18,20 @@ import 'services/supabase_service.dart';
 import 'providers/utility_provider.dart';
 import 'utils/app_theme.dart';
 import 'screens/splash_screen.dart';
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+        PointerDeviceKind.unknown,
+      };
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -152,12 +167,14 @@ class HomeFlowApp extends StatelessWidget {
           ? MaterialApp.router(
               title: 'homeFlow Admin',
               theme: AppTheme.lightTheme,
+              scrollBehavior: const AppScrollBehavior(),
               debugShowCheckedModeBanner: false,
               routerConfig: _adminRouter,
             )
           : MaterialApp(
               title: 'homeFlow',
               theme: AppTheme.lightTheme,
+              scrollBehavior: const AppScrollBehavior(),
               debugShowCheckedModeBanner: false,
               home: const _AppEntry(),
             ),
