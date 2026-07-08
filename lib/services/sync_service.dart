@@ -43,28 +43,99 @@ class SyncService {
     String? deliverySmsNotes,
     String? supermarketDeliveryNotes,
   }) async {
-    if (!isAvailable) return null;
-    try {
+    if (!isAvailable) {
+      throw Exception('No active session. Please sign out and try again.');
+    }
+
+    Future<String?> insertHousehold(Map<String, dynamic> values) async {
       final resp = await _db
           .from('app_households')
-          .insert({
-            'household_name': name,
-            'invite_code': inviteCode,
-            'homeowner_invite_code': homeownerInviteCode,
-            'owner_user_id': _db.auth.currentUser!.id,
-            'plan_code': 'free',
-            'plan_status': 'active',
-            'delivery_address': deliveryAddress,
-            'delivery_contact_name': deliveryContactName,
-            'delivery_phone': deliveryPhone,
-            'delivery_sms_notes': deliverySmsNotes,
-            'supermarket_delivery_notes': supermarketDeliveryNotes,
-          })
+          .insert(values)
           .select('id')
           .single();
       return (resp['id'] as Object?)?.toString();
+    }
+
+    final baseValues = <String, dynamic>{
+      'household_name': name,
+      'invite_code': inviteCode,
+      'homeowner_invite_code': homeownerInviteCode,
+      'owner_user_id': _db.auth.currentUser!.id,
+      'plan_code': 'free',
+      'plan_status': 'active',
+    };
+
+    final valuesWithDelivery = <String, dynamic>{
+      ...baseValues,
+      if (deliveryAddress != null && deliveryAddress.trim().isNotEmpty)
+        'delivery_address': deliveryAddress,
+      if (deliveryContactName != null && deliveryContactName.trim().isNotEmpty)
+        'delivery_contact_name': deliveryContactName,
+      if (deliveryPhone != null && deliveryPhone.trim().isNotEmpty)
+        'delivery_phone': deliveryPhone,
+      if (deliverySmsNotes != null && deliverySmsNotes.trim().isNotEmpty)
+        'delivery_sms_notes': deliverySmsNotes,
+      if (supermarketDeliveryNotes != null &&
+          supermarketDeliveryNotes.trim().isNotEmpty)
+        'supermarket_delivery_notes': supermarketDeliveryNotes,
+    };
+
+    final minimalValues = <String, dynamic>{
+      'household_name': name,
+      'invite_code': inviteCode,
+      'owner_user_id': _db.auth.currentUser!.id,
+    };
+
+    final payloads = <Map<String, dynamic>>[
+      valuesWithDelivery,
+      baseValues,
+      minimalValues,
+    ];
+
+    PostgrestException? lastSchemaError;
+
+    for (var index = 0; index < payloads.length; index++) {
+      try {
+        return await insertHousehold(payloads[index]);
+      } on PostgrestException catch (error) {
+        final message = error.message.toLowerCase();
+        final isSchemaCacheColumnError =
+            error.code == 'PGRST204' &&
+            message.contains("column") &&
+            message.contains("app_households") &&
+            message.contains("schema cache");
+        if (!isSchemaCacheColumnError || index == payloads.length - 1) {
+          rethrow;
+        }
+
+        lastSchemaError = error;
+        debugPrint(
+          '[SyncService] app_households schema is missing newer columns; retrying createHousehold with a reduced payload.',
+        );
+      }
+    }
+
+    if (lastSchemaError != null) throw lastSchemaError;
+    return null;
+  }
+
+  /// Look up an existing household owned by the current user.
+  /// Returns the full household row, or null if none exists.
+  static Future<Map<String, dynamic>?> fetchOwnedHousehold() async {
+    if (!isAvailable) return null;
+    try {
+      final userId = _db.auth.currentUser!.id;
+      final rows = await _db
+          .from('app_households')
+          .select()
+          .eq('owner_user_id', userId)
+          .limit(1);
+      if (rows is List && rows.isNotEmpty) {
+        return Map<String, dynamic>.from(rows.first as Map);
+      }
+      return null;
     } catch (e) {
-      debugPrint('[SyncService] createHousehold error: $e');
+      debugPrint('[SyncService] fetchOwnedHousehold error: $e');
       return null;
     }
   }
@@ -116,11 +187,11 @@ class SyncService {
       return result as String?;
     } catch (e) {
       debugPrint('[SyncService] joinHouseholdByInviteCode error: $e');
-      // Propagate "invalid invite code" so callers can show the right message;
-      // swallow all other errors (network, auth) and let callers handle null.
       final msg = e.toString().toLowerCase();
       if (msg.contains('invalid invite code')) {
-        rethrow;
+        throw Exception(
+          'That code is not valid. Make sure you have the right code from the homeowner and that you are entering it exactly.',
+        );
       }
       return null;
     }

@@ -241,21 +241,6 @@ class DashboardScreen extends StatelessWidget {
                               const SizedBox(height: 3),
                               Row(
                                 children: [
-                                  const Icon(
-                                    Icons.home_outlined,
-                                    color: Colors.white60,
-                                    size: 12,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    household?.householdName ??
-                                        'Your Household',
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
                                   _RolePill(
                                     label: auth.isOwner ? 'Owner' : 'Manager',
                                   ),
@@ -325,12 +310,8 @@ class DashboardScreen extends StatelessWidget {
                   _QuickActionsRow(
                     isOwner: auth.isOwner,
                     onNavigate: onNavigate,
+                    onOpenInsights: openHomeProIntelligence,
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Sponsored ad strip
-                  const _AdBannerStrip(),
 
                   const SizedBox(height: 16),
 
@@ -351,6 +332,11 @@ class DashboardScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // Sponsored ad strip
+                  const _AdBannerStrip(),
 
                   const SizedBox(height: 20),
                   _SectionHeader(
@@ -1254,19 +1240,18 @@ class _AlertBanner extends StatelessWidget {
 class _QuickActionsRow extends StatelessWidget {
   final bool isOwner;
   final void Function(int)? onNavigate;
+  final VoidCallback onOpenInsights;
 
-  const _QuickActionsRow({required this.isOwner, this.onNavigate});
+  const _QuickActionsRow({
+    required this.isOwner,
+    required this.onOpenInsights,
+    this.onNavigate,
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = isOwner
         ? [
-            _QA(
-              Icons.inventory_2_outlined,
-              'Supplies',
-              AppColors.primaryTeal,
-              () => onNavigate?.call(1),
-            ),
             _QA(
               Icons.check_circle_outline,
               'Approve',
@@ -1303,14 +1288,14 @@ class _QuickActionsRow extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const StaffScreen()),
               ),
             ),
+            _QA(
+              Icons.auto_awesome_mosaic_rounded,
+              'Insights',
+              AppColors.uiBlue,
+              onOpenInsights,
+            ),
           ]
         : [
-            _QA(
-              Icons.inventory_2_outlined,
-              'Supplies',
-              AppColors.primaryTeal,
-              () => onNavigate?.call(1),
-            ),
             _QA(
               Icons.shopping_cart_outlined,
               'Request',
@@ -1327,22 +1312,10 @@ class _QuickActionsRow extends StatelessWidget {
               ),
             ),
             _QA(
-              Icons.local_laundry_service_outlined,
-              'Laundry',
-              AppColors.secondaryTeal,
-              () => onNavigate?.call(3),
-            ),
-            _QA(
-              Icons.restaurant_outlined,
-              'Meals',
-              AppColors.statusLowText,
-              () => onNavigate?.call(4),
-            ),
-            _QA(
-              Icons.child_care_outlined,
-              'Kids',
-              AppColors.primaryTeal,
-              () => onNavigate?.call(5),
+              Icons.auto_awesome_mosaic_rounded,
+              'Insights',
+              AppColors.uiBlue,
+              onOpenInsights,
             ),
           ];
 
@@ -2690,6 +2663,28 @@ class _AdBannerStrip extends StatefulWidget {
 }
 
 class _AdBannerStripState extends State<_AdBannerStrip> {
+  Color _brandPrimaryColor(AdOffer offer) {
+    switch (offer.advertiser.toLowerCase()) {
+      case 'naivas':
+        return const Color(0xFF1B8A4A);
+      case 'carrefour':
+        return const Color(0xFF004B87);
+      default:
+        return offer.accentColor;
+    }
+  }
+
+  Color _brandSecondaryColor(AdOffer offer) {
+    switch (offer.advertiser.toLowerCase()) {
+      case 'naivas':
+        return const Color(0xFFF28C1B);
+      case 'carrefour':
+        return const Color(0xFFE2001A);
+      default:
+        return offer.accentColor;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2750,6 +2745,8 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
             separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemBuilder: (context, i) {
               final offer = offers[i];
+              final primaryColor = _brandPrimaryColor(offer);
+              final secondaryColor = _brandSecondaryColor(offer);
               return GestureDetector(
                 onTap: () => _showAdCartSheet(context, offer),
                 child: Container(
@@ -2759,11 +2756,11 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: offer.accentColor.withValues(alpha: 0.22),
+                      color: primaryColor.withValues(alpha: 0.22),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: offer.accentColor.withValues(alpha: 0.07),
+                        color: primaryColor.withValues(alpha: 0.07),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -2779,12 +2776,19 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
                             width: 46,
                             height: 46,
                             decoration: BoxDecoration(
-                              color: offer.accentColor.withValues(alpha: 0.1),
+                              gradient: LinearGradient(
+                                colors: [
+                                  secondaryColor.withValues(alpha: 0.16),
+                                  primaryColor.withValues(alpha: 0.12),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
                               _iconFor(offer.advertiser),
-                              color: offer.accentColor,
+                              color: primaryColor,
                               size: 23,
                             ),
                           ),
@@ -2795,7 +2799,7 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 5, vertical: 2),
                               decoration: BoxDecoration(
-                                color: offer.accentColor,
+                                color: secondaryColor,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -2822,7 +2826,7 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: offer.accentColor,
+                                color: primaryColor,
                                 letterSpacing: 0.3,
                               ),
                             ),
@@ -2854,7 +2858,7 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: offer.accentColor,
+                                    color: primaryColor,
                                   ),
                                 ),
                               ],
@@ -2874,13 +2878,13 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
                                 Icon(Icons.add_shopping_cart_rounded,
                                     size: 11,
                                     color:
-                                        offer.accentColor.withValues(alpha: 0.7)),
+                                        secondaryColor.withValues(alpha: 0.8)),
                                 const SizedBox(width: 3),
                                 Text(
                                   'Tap to add',
                                   style: TextStyle(
                                     fontSize: 9,
-                                    color: offer.accentColor
+                                    color: secondaryColor
                                         .withValues(alpha: 0.7),
                                   ),
                                 ),
@@ -2929,6 +2933,28 @@ class _AdAddToCartSheet extends StatefulWidget {
 class _AdAddToCartSheetState extends State<_AdAddToCartSheet> {
   final _qtyCtrl = TextEditingController(text: '1');
 
+  Color _brandPrimaryColor() {
+    switch (widget.offer.advertiser.toLowerCase()) {
+      case 'naivas':
+        return const Color(0xFF1B8A4A);
+      case 'carrefour':
+        return const Color(0xFF004B87);
+      default:
+        return widget.offer.accentColor;
+    }
+  }
+
+  Color _brandSecondaryColor() {
+    switch (widget.offer.advertiser.toLowerCase()) {
+      case 'naivas':
+        return const Color(0xFFF28C1B);
+      case 'carrefour':
+        return const Color(0xFFE2001A);
+      default:
+        return widget.offer.accentColor;
+    }
+  }
+
   @override
   void dispose() {
     _qtyCtrl.dispose();
@@ -2940,7 +2966,8 @@ class _AdAddToCartSheetState extends State<_AdAddToCartSheet> {
     final auth = context.read<AuthProvider>();
     final supply = context.read<SupplyProvider>();
     final isOwner = auth.isOwner;
-    final accent = widget.offer.accentColor;
+    final accent = _brandPrimaryColor();
+    final accentSecondary = _brandSecondaryColor();
 
     return Container(
       decoration: const BoxDecoration(
@@ -2959,7 +2986,14 @@ class _AdAddToCartSheetState extends State<_AdAddToCartSheet> {
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.1),
+                  gradient: LinearGradient(
+                    colors: [
+                      accentSecondary.withValues(alpha: 0.16),
+                      accent.withValues(alpha: 0.12),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.local_offer_rounded, color: accent, size: 20),
@@ -3019,7 +3053,7 @@ class _AdAddToCartSheetState extends State<_AdAddToCartSheet> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
+                  color: accentSecondary.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -3027,7 +3061,7 @@ class _AdAddToCartSheetState extends State<_AdAddToCartSheet> {
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: accent),
+                      color: accentSecondary),
                 ),
               ),
             ],

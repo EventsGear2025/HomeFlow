@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,8 +16,6 @@ class OtpScreen extends StatefulWidget {
   final String fullName;
   final String? householdName;
   final String? homeownerInviteCode;
-  final String? deliveryAddress;
-  final String? deliveryPhone;
 
   const OtpScreen({
     super.key,
@@ -24,8 +23,6 @@ class OtpScreen extends StatefulWidget {
     required this.fullName,
     this.householdName,
     this.homeownerInviteCode,
-    this.deliveryAddress,
-    this.deliveryPhone,
   });
 
   @override
@@ -50,10 +47,12 @@ class _OtpScreenState extends State<OtpScreen> {
   void initState() {
     super.initState();
     _startCooldown();
+    WakelockPlus.enable();
   }
 
   @override
   void dispose() {
+    WakelockPlus.disable();
     _cooldownTimer?.cancel();
     _otpCtrl.dispose();
     super.dispose();
@@ -70,9 +69,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
     if (!_isJoiningExistingHousehold) {
       final householdName = widget.householdName?.trim() ?? '';
-      final deliveryAddress = widget.deliveryAddress?.trim() ?? '';
-      if (householdName.isEmpty || deliveryAddress.isEmpty) {
-        _showError('Your household details are incomplete. Go back and enter the household name and delivery address again.');
+      if (householdName.isEmpty) {
+        _showError('Your household details are incomplete. Go back and enter the household name again.');
         return;
       }
     }
@@ -103,8 +101,6 @@ class _OtpScreenState extends State<OtpScreen> {
           fullName: widget.fullName,
           email: normalizedEmail,
           householdName: widget.householdName!.trim(),
-          deliveryAddress: widget.deliveryAddress!.trim(),
-          deliveryPhone: widget.deliveryPhone?.trim(),
         );
       }
 
@@ -129,11 +125,18 @@ class _OtpScreenState extends State<OtpScreen> {
       );
     } on AuthException catch (e) {
       if (!mounted) return;
+      final code = e.code?.toLowerCase();
       final msg = e.message.toLowerCase();
-      if (!otpVerified && (msg.contains('expired') || msg.contains('invalid'))) {
+      if (!otpVerified && (code == 'otp_expired' || msg.contains('expired'))) {
         _otpCtrl.clear();
         setState(() => _codeExpired = true);
-        _showError('That code has expired. Tap Send a new code below.');
+        _showError('That code has expired. Tap resend below.');
+      } else if (!otpVerified && msg.contains('invalid')) {
+        _otpCtrl.clear();
+        setState(() => _codeExpired = false);
+        _showError(
+          'That code is no longer valid. Use the most recent email we sent or tap resend below.',
+        );
       } else {
         _showError(e.message);
       }
@@ -166,7 +169,7 @@ class _OtpScreenState extends State<OtpScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('A new code has been sent to your email.'),
+          content: Text('We resent the confirmation email to your inbox.'),
         ),
       );
       setState(() {
@@ -229,20 +232,49 @@ class _OtpScreenState extends State<OtpScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Your household is ready'),
+        backgroundColor: AppColors.cardBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        title: const Text(
+          'Your household is ready',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Share these codes with the right people when they sign up.',
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: const Text(
+                'Share each code with the right person during sign-up. You can always find them again later from Household access.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             if (managerInviteCode.isNotEmpty)
               _InviteCodeCard(
-                label: 'House manager code',
+                label: 'Manager sign-up code',
                 code: managerInviteCode,
-                helper: 'Use this for house managers joining the household.',
+                helper:
+                    'Share this with the person joining as your house manager.',
+                backgroundColor: AppColors.statusVeryLow,
+                borderColor: AppColors.accentOrange.withValues(alpha: 0.22),
+                labelColor: AppColors.accentOrange,
               ),
             if (managerInviteCode.isNotEmpty && homeownerInviteCode.isNotEmpty)
               const SizedBox(height: 12),
@@ -250,12 +282,20 @@ class _OtpScreenState extends State<OtpScreen> {
               _InviteCodeCard(
                 label: 'Additional homeowner code',
                 code: homeownerInviteCode,
-                helper: 'Use this for other homeowners joining the same household.',
+                helper:
+                    'Share this with another homeowner joining the same household.',
+                backgroundColor: AppColors.surfaceLight,
+                borderColor: AppColors.divider,
+                labelColor: AppColors.textSecondary,
               ),
             const SizedBox(height: 8),
             const Text(
-              'You can find both codes later from the account drawer under household access.',
-              style: TextStyle(fontSize: 12),
+              'You can also copy the codes now and send them later when needed.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -359,7 +399,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   : 'Creating a new household',
               body: _isJoiningExistingHousehold
                   ? 'Invite code: ${widget.homeownerInviteCode ?? '—'}'
-                  : 'Household: ${widget.householdName ?? '—'}\nDelivery address: ${widget.deliveryAddress ?? '—'}',
+                  : 'Household: ${widget.householdName ?? '—'}',
             ),
             const SizedBox(height: 24),
             TextFormField(
@@ -463,8 +503,8 @@ class _OtpScreenState extends State<OtpScreen> {
                 Expanded(
                   child: Text(
                     _resendCooldown > 0
-                        ? 'Send a new code in ${_resendCooldown}s'
-                        : 'Didn\'t get the code?',
+                        ? 'Resend email in ${_resendCooldown}s'
+                        : 'Didn\'t get the email?',
                     style: const TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
@@ -485,15 +525,15 @@ class _OtpScreenState extends State<OtpScreen> {
                         )
                       : const Icon(Icons.refresh_rounded, size: 18),
                   label: _resending
-                      ? const Text('Sending new code…')
+                      ? const Text('Resending email…')
                       : _resendCooldown > 0
                           ? Text(
-                              'Resend in ${_resendCooldown}s',
+                              'Resend email in ${_resendCooldown}s',
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                               ),
                             )
-                          : const Text('Send a new code'),
+                          : const Text('Resend email'),
                 ),
               ],
             ),
@@ -536,45 +576,67 @@ class _InviteCodeCard extends StatelessWidget {
   final String label;
   final String code;
   final String helper;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color labelColor;
 
   const _InviteCodeCard({
     required this.label,
     required this.code,
     required this.helper,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.labelColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
+              color: labelColor,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            code,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  letterSpacing: 4,
-                  fontWeight: FontWeight.bold,
-                ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Text(
+              code,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             helper,
-            style: const TextStyle(fontSize: 12),
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),

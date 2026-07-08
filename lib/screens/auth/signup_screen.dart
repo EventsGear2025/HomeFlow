@@ -99,8 +99,6 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
   final _passwordCtrl = TextEditingController();
   final _householdCtrl = TextEditingController();
   final _inviteCtrl = TextEditingController();
-  final _deliveryAddressCtrl = TextEditingController();
-  final _deliveryPhoneCtrl = TextEditingController();
   bool _obscure = true;
   bool _joiningExistingHousehold = false;
   bool _loading = false;
@@ -112,8 +110,6 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
     _passwordCtrl.dispose();
     _householdCtrl.dispose();
     _inviteCtrl.dispose();
-    _deliveryAddressCtrl.dispose();
-    _deliveryPhoneCtrl.dispose();
     super.dispose();
   }
 
@@ -126,8 +122,6 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
     final fullName = _nameCtrl.text.trim();
     final householdName = _householdCtrl.text.trim();
     final inviteCode = _inviteCtrl.text.trim().toUpperCase();
-    final deliveryAddress = _deliveryAddressCtrl.text.trim();
-    final deliveryPhone = _deliveryPhoneCtrl.text.trim();
     bool needsEmailConfirmation;
     try {
       if (_joiningExistingHousehold) {
@@ -143,8 +137,6 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
           email: email,
           password: _passwordCtrl.text,
           householdName: householdName,
-          deliveryAddress: deliveryAddress,
-          deliveryPhone: deliveryPhone,
         );
       }
     } catch (e) {
@@ -173,8 +165,6 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
             fullName: fullName,
             email: email,
             householdName: householdName,
-            deliveryAddress: deliveryAddress,
-            deliveryPhone: deliveryPhone,
           );
         }
       } catch (e) {
@@ -210,10 +200,6 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
               _joiningExistingHousehold ? null : householdName,
           homeownerInviteCode:
               _joiningExistingHousehold ? inviteCode : null,
-          deliveryAddress:
-              _joiningExistingHousehold ? null : deliveryAddress,
-          deliveryPhone:
-              _joiningExistingHousehold ? null : deliveryPhone,
         ),
       ),
     );
@@ -234,7 +220,7 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
               icon: Icons.verified_user_outlined,
               text: _joiningExistingHousehold
                   ? 'Use the homeowner invite code from an existing household. You\'ll verify your email first, then join that household as an additional homeowner.'
-                  : 'Create your household account. Add the exact delivery address now, then share separate invite codes with house managers and additional homeowners.',
+                  : 'Create your household account. You can add the delivery address from the menu after signing up.',
             ),
             const SizedBox(height: 24),
             Container(
@@ -250,7 +236,7 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
                     selected: !_joiningExistingHousehold,
                     title: 'Create a new household',
                     subtitle:
-                        'Set up the household, delivery address, and invite codes.',
+                        'Set up the household and invite codes.',
                     onTap: () => setState(() => _joiningExistingHousehold = false),
                   ),
                   const Divider(height: 8),
@@ -294,6 +280,7 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
               obscureText: _obscure,
               decoration: InputDecoration(
                 labelText: 'Password',
+                helperText: 'At least 6 characters',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -335,30 +322,6 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
                     ? 'Enter the household name'
                     : null,
               ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _deliveryAddressCtrl,
-                textCapitalization: TextCapitalization.sentences,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Delivery address',
-                  prefixIcon: Icon(Icons.location_on_outlined),
-                  alignLabelWithHint: true,
-                  hintText: 'Estate, house number, landmark, and delivery notes',
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Enter the delivery address'
-                    : null,
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _deliveryPhoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Delivery contact phone (optional)',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                ),
-              ),
             ],
             const SizedBox(height: 32),
             SizedBox(
@@ -366,11 +329,19 @@ class _OwnerSignUpFormState extends State<_OwnerSignUpForm> {
               child: ElevatedButton(
                 onPressed: (_loading || auth.isLoading) ? null : _submit,
                 child: (_loading || auth.isLoading)
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2),
+                          ),
+                          SizedBox(width: 10),
+                          Text('Sending verification email…'),
+                        ],
                       )
                     : Text(_joiningExistingHousehold
                         ? 'Join Household & Verify Email'
@@ -528,6 +499,7 @@ class _ManagerSignUpFormState extends State<_ManagerSignUpForm> {
               obscureText: _obscure,
               decoration: InputDecoration(
                 labelText: 'Password',
+                helperText: 'At least 6 characters',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(

@@ -725,6 +725,49 @@ class AuthProvider extends ChangeNotifier {
   String get managerInviteCode => _household?.managerInviteCode ?? '';
   String get homeownerInviteCode => _household?.homeownerInviteCode ?? '';
 
+  /// Replace the manager sign-up code with a new random code.
+  /// Existing members who already joined are unaffected — membership is
+  /// stored by user_id, not by invite code.
+  Future<void> regenerateManagerCode() async {
+    final household = _household;
+    if (household == null) throw Exception('No household found.');
+
+    var newCode = _generateInviteCode();
+    while (newCode == household.homeownerInviteCode) {
+      newCode = _generateInviteCode();
+    }
+    await SyncService.updateHouseholdDetails(
+      householdId: household.id,
+      managerInviteCode: newCode,
+    );
+    _household = household.copyWith(managerInviteCode: newCode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('household', jsonEncode(_household!.toJson()));
+    await prefs.setString('household_${household.id}', jsonEncode(_household!.toJson()));
+    notifyListeners();
+  }
+
+  /// Replace the additional homeowner sign-up code with a new random code.
+  /// Existing members who already joined are unaffected.
+  Future<void> regenerateHomeownerCode() async {
+    final household = _household;
+    if (household == null) throw Exception('No household found.');
+
+    var newCode = _generateInviteCode();
+    while (newCode == household.managerInviteCode) {
+      newCode = _generateInviteCode();
+    }
+    await SyncService.updateHouseholdDetails(
+      householdId: household.id,
+      homeownerInviteCode: newCode,
+    );
+    _household = household.copyWith(homeownerInviteCode: newCode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('household', jsonEncode(_household!.toJson()));
+    await prefs.setString('household_${household.id}', jsonEncode(_household!.toJson()));
+    notifyListeners();
+  }
+
   /// Send a password-reset email via Supabase. Shows no error to the caller
   /// if the email doesn't exist (security best practice).
   Future<void> sendPasswordReset(String email) async {
@@ -746,8 +789,6 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
     required String householdName,
-    required String deliveryAddress,
-    String? deliveryPhone,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -766,11 +807,8 @@ class AuthProvider extends ChangeNotifier {
           'full_name': fullName,
           'role': 'owner',
           'pending_household': householdName,
-          'pending_delivery_address': deliveryAddress,
-          if (deliveryPhone?.trim().isNotEmpty == true)
-            'pending_delivery_phone': deliveryPhone!.trim(),
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 20));
 
       if (resp.session != null) {
         debugPrint('[signUpOwner] Immediate session - no email confirmation needed');
@@ -787,20 +825,21 @@ class AuthProvider extends ChangeNotifier {
         try {
           await _supabaseAuthService
               .resendOtp(email: normalizedEmail)
-              .timeout(const Duration(seconds: 10));
+              .timeout(const Duration(seconds: 30));
         } catch (error) {
-          if (!SupabaseAuthService.isRateLimitError(error)) {
-            rethrow;
-          }
-          debugPrint(
-            '[signUpOwner] Resend rate-limited, continuing to OTP screen',
-          );
+          // If resend fails for any reason (rate-limit, timeout, network)
+          // the original signup already sent an OTP — proceed to OTP screen.
+          debugPrint('[signUpOwner] Resend failed (proceeding): $error');
         }
       }
     } catch (e) {
       debugPrint('[signUpOwner] error: $e');
       _isLoading = false;
       notifyListeners();
+      // Rate-limit or timeout means Supabase already processed the request
+      // and the OTP email is on its way — go to OTP screen.
+      if (SupabaseAuthService.isRateLimitError(e) ||
+          e.toString().contains('TimeoutException')) return true;
       throw Exception(_friendlyAuthError(e));
     }
     _isLoading = false;
@@ -830,7 +869,7 @@ class AuthProvider extends ChangeNotifier {
           'full_name': fullName,
           'role': 'owner',
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 20));
 
       if (resp.session != null) {
         debugPrint('[signUpAdditionalHomeownerPreStep] Immediate session');
@@ -845,20 +884,17 @@ class AuthProvider extends ChangeNotifier {
         try {
           await _supabaseAuthService
               .resendOtp(email: normalizedEmail)
-              .timeout(const Duration(seconds: 10));
+              .timeout(const Duration(seconds: 30));
         } catch (error) {
-          if (!SupabaseAuthService.isRateLimitError(error)) {
-            rethrow;
-          }
-          debugPrint(
-            '[signUpAdditionalHomeownerPreStep] Resend rate-limited, continuing to OTP screen',
-          );
+          debugPrint('[signUpAdditionalHomeownerPreStep] Resend failed (proceeding): $error');
         }
       }
     } catch (e) {
       debugPrint('[signUpAdditionalHomeownerPreStep] error: $e');
       _isLoading = false;
       notifyListeners();
+      if (SupabaseAuthService.isRateLimitError(e) ||
+          e.toString().contains('TimeoutException')) return true;
       throw Exception(_friendlyAuthError(e));
     }
     _isLoading = false;
@@ -871,7 +907,7 @@ class AuthProvider extends ChangeNotifier {
     required String fullName,
     required String email,
     required String householdName,
-    required String deliveryAddress,
+    String deliveryAddress = '',
     String? deliveryPhone,
   }) async {
     _isLoading = true;
@@ -880,20 +916,45 @@ class AuthProvider extends ChangeNotifier {
       final supabaseUser = _supabaseAuthService.currentSupabaseUser;
       if (supabaseUser == null) throw Exception('Session not found. Please sign in again.');
 
-      final managerCode = _generateInviteCode();
-      var homeownerCode = _generateInviteCode();
-      while (homeownerCode == managerCode) {
+      // Idempotency: if a household already exists for this owner (e.g. from a
+      // previous partial attempt), reuse it instead of inserting a duplicate.
+      String householdId;
+      String managerCode;
+      String homeownerCode;
+
+      final existing = await SyncService.fetchOwnedHousehold();
+      if (existing != null) {
+        householdId   = existing['id'].toString();
+        managerCode   = existing['invite_code']?.toString() ?? _generateInviteCode();
+        final savedHomeownerCode = existing['homeowner_invite_code']?.toString();
+        homeownerCode = savedHomeownerCode ?? _generateInviteCode();
+        // Persist the homeowner code if it was missing in the DB (partial sign-up recovery)
+        if (savedHomeownerCode == null) {
+          await SyncService.updateHouseholdDetails(
+            householdId: householdId,
+            homeownerInviteCode: homeownerCode,
+          );
+        }
+      } else {
+        managerCode = _generateInviteCode();
         homeownerCode = _generateInviteCode();
+        while (homeownerCode == managerCode) {
+          homeownerCode = _generateInviteCode();
+        }
+        final createdId = await SyncService.createHousehold(
+          name: householdName,
+          inviteCode: managerCode,
+          homeownerInviteCode: homeownerCode,
+          deliveryAddress: deliveryAddress.trim(),
+          deliveryContactName: fullName,
+          deliveryPhone: deliveryPhone?.trim(),
+        );
+        if (createdId == null) throw Exception('Household creation failed. Please try again.');
+        householdId = createdId;
       }
-      final createdId = await SyncService.createHousehold(
-        name: householdName,
-        inviteCode: managerCode,
-        homeownerInviteCode: homeownerCode,
-        deliveryAddress: deliveryAddress.trim(),
-        deliveryContactName: fullName,
-        deliveryPhone: deliveryPhone?.trim(),
-      );
-      if (createdId == null) throw Exception('Household creation failed. Please try again.');
+
+      // reassign for the block below (was previously `createdId`)
+      final createdId = householdId;
 
       await SyncService.ensureHouseholdMember(
         createdId,
@@ -1041,7 +1102,7 @@ class AuthProvider extends ChangeNotifier {
           'full_name': fullName,
           'role': 'house_manager',
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 20));
 
       // If Supabase gave us a session immediately (email confirmation off),
       // we're done — no further steps needed.
@@ -1061,24 +1122,19 @@ class AuthProvider extends ChangeNotifier {
         try {
           await _supabaseAuthService
               .resendOtp(email: normalizedEmail)
-              .timeout(const Duration(seconds: 10));
+              .timeout(const Duration(seconds: 30));
         } catch (error) {
-          if (!SupabaseAuthService.isRateLimitError(error)) {
-            rethrow;
-          }
-          debugPrint(
-            '[signUpManagerPreStep] Resend rate-limited, continuing to OTP screen',
-          );
+          debugPrint('[signUpManagerPreStep] Resend failed (proceeding): $error');
         }
       }
 
       // Do not join the household until OTP verification succeeds.
-      // This keeps the manager flow aligned with the working owner flow and
-      // avoids any extra side effects before the email token is verified.
     } catch (e) {
       debugPrint('[signUpManagerPreStep] error: $e');
       _isLoading = false;
       notifyListeners();
+      if (SupabaseAuthService.isRateLimitError(e) ||
+          e.toString().contains('TimeoutException')) return true;
       throw Exception(_friendlyAuthError(e));
     }
     _isLoading = false;
@@ -1338,7 +1394,8 @@ class AuthProvider extends ChangeNotifier {
     final msg = e.toString();
     // Already a friendly message from this provider
     if (e is Exception &&
-        (msg.contains('Invalid invite code') ||
+        (msg.contains('That code is not valid') ||
+            msg.contains('Invalid invite code') ||
             msg.contains('Invalid sign-up code') ||
             msg.contains('Could not join household') ||
             msg.contains('Session not found') ||
@@ -1347,15 +1404,17 @@ class AuthProvider extends ChangeNotifier {
             msg.contains('reserved'))) {
       return msg.replaceFirst('Exception: ', '');
     }
+    // Request timed out (server slow, not necessarily offline)
+    if (msg.contains('TimeoutException')) {
+      return 'The server took too long to respond. Please check your connection and try again.';
+    }
     // Network / DNS failures
     if (msg.contains('SocketException') ||
         msg.contains('SocketFailed') ||
         msg.contains('Failed host lookup') ||
         msg.contains('No address associated') ||
-        msg.contains('ClientException') ||
         msg.contains('Network is unreachable') ||
-        msg.contains('Connection refused') ||
-        msg.contains('TimeoutException')) {
+        msg.contains('Connection refused')) {
       return 'No internet connection. Please check your network and try again.';
     }
     // Supabase auth errors
@@ -1371,6 +1430,22 @@ class AuthProvider extends ChangeNotifier {
     }
     if (SupabaseAuthService.isRateLimitError(e)) {
       return SupabaseAuthService.resendRateLimitMessage;
+    }
+    // Postgres / PostgREST errors — convert to user-friendly messages
+    if (msg.contains('duplicate key') ||
+        msg.contains('unique constraint') ||
+        msg.contains('23505')) {
+      return 'Account setup failed due to a duplicate entry. Please try again.';
+    }
+    if (msg.contains('permission denied') ||
+        msg.contains('violates row-level security') ||
+        msg.contains('42501') ||
+        msg.contains('new row violates')) {
+      return 'Permission error during account setup. Please sign out and try again.';
+    }
+    if (msg.contains('PGRST204') ||
+        (msg.contains('column') && msg.contains('schema cache'))) {
+      return 'Account setup failed due to a configuration issue. Please try again.';
     }
     // Fallback — strip the "Exception:" prefix Flutter adds
     return msg.replaceFirst('Exception: ', '');

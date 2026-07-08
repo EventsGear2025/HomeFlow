@@ -126,12 +126,12 @@ class _LinkedManagersSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'No house manager has joined yet.',
+                  const Text(
+                    'No house manager has joined yet.\nShare your manager code so they can sign up and join your household.',
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
-                      height: 1.4,
+                      height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 10),

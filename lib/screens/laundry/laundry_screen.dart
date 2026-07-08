@@ -25,10 +25,17 @@ class _LaundryScreenState extends State<LaundryScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
+    _tabs.addListener(_handleTabChanged);
+  }
+
+  void _handleTabChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
   void dispose() {
+    _tabs.removeListener(_handleTabChanged);
     _tabs.dispose();
     super.dispose();
   }
@@ -37,6 +44,8 @@ class _LaundryScreenState extends State<LaundryScreen>
   Widget build(BuildContext context) {
     final laundry = context.watch<LaundryProvider>();
     final auth = context.watch<AuthProvider>();
+    final hideFabForEmptyActiveState =
+        !laundry.isLoading && _tabs.index == 0 && laundry.items.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.surfaceLight,
@@ -59,16 +68,21 @@ class _LaundryScreenState extends State<LaundryScreen>
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'laundry_fab',
-        backgroundColor: AppColors.primaryTeal,
-        onPressed: () => _showAddSheet(context),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Add Load',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-      ),
+      floatingActionButton: hideFabForEmptyActiveState
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'laundry_fab',
+              backgroundColor: AppColors.primaryTeal,
+              onPressed: () => _showAddSheet(context),
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text(
+                'Add Load',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
       body: laundry.isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
@@ -111,12 +125,20 @@ class _LaundryScreenState extends State<LaundryScreen>
 // TAB 1 — ACTIVE
 // ════════════════════════════════════════════════════════════════════
 
-class _ActiveTab extends StatelessWidget {
+class _ActiveTab extends StatefulWidget {
   final LaundryProvider laundry;
   const _ActiveTab({required this.laundry});
 
   @override
+  State<_ActiveTab> createState() => _ActiveTabState();
+}
+
+class _ActiveTabState extends State<_ActiveTab> {
+  bool _showAllStored = false;
+
+  @override
   Widget build(BuildContext context) {
+    final laundry = widget.laundry;
     final activeByBedroom = laundry.itemsByBedroom;
     final stored = laundry.storedItems;
 
@@ -125,7 +147,7 @@ class _ActiveTab extends StatelessWidget {
         icon: Icons.local_laundry_service_outlined,
         title: 'No laundry tracked yet',
         subtitle: 'Add laundry loads by bedroom to track progress',
-        buttonLabel: 'New Load',
+        buttonLabel: 'Add Load',
         onButton: () => showModalBottomSheet(
           context: context,
           isScrollControlled: true,
@@ -169,14 +191,41 @@ class _ActiveTab extends StatelessWidget {
             helper: 'Completed loads safely packed away.',
           ),
           const SizedBox(height: 8),
-          ...stored
-              .take(10)
+          ...(_showAllStored ? stored : stored.take(10))
               .map(
                 (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _StoredCard(item: item),
                 ),
               ),
+          if (stored.length > 10 && !_showAllStored)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showAllStored = true),
+                  icon: const Icon(Icons.expand_more, size: 16),
+                  label: Text(
+                    'Show ${stored.length - 10} more',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ),
+            ),
+          if (_showAllStored && stored.length > 10)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showAllStored = false),
+                  icon: const Icon(Icons.expand_less, size: 16),
+                  label: const Text(
+                    'Show less',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ),
+            ),
         ],
 
         if (activeByBedroom.isEmpty && stored.isEmpty)
@@ -912,8 +961,33 @@ class _HistoryCard extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
-                  onPressed: () =>
-                      laundry.removeItem(item.id, auth.household!.id),
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Remove laundry item?'),
+                        content: Text(
+                          'Remove "${item.bedroom}" laundry from stored items?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red.shade700,
+                            ),
+                            child: const Text('Remove'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true && context.mounted) {
+                      laundry.removeItem(item.id, auth.household!.id);
+                    }
+                  },
                   icon: const Icon(
                     Icons.delete_outline,
                     size: 14,
@@ -1479,7 +1553,33 @@ class _StoredCard extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.close, size: 18, color: AppColors.textHint),
             tooltip: 'Remove',
-            onPressed: () => laundry.removeItem(item.id, auth.household!.id),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Remove laundry item?'),
+                  content: Text(
+                    'Remove "${item.bedroom}" from stored items?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                      ),
+                      child: const Text('Remove'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true && context.mounted) {
+                laundry.removeItem(item.id, auth.household!.id);
+              }
+            },
           ),
         ],
       ),

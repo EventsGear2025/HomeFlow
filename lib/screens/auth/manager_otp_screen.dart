@@ -88,11 +88,18 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
     } on AuthException catch (e) {
       debugPrint('[ManagerOTP] AuthException: ${e.statusCode} ${e.message}');
       if (!mounted) return;
+      final code = e.code?.toLowerCase();
       final msg = e.message.toLowerCase();
-      if (!otpVerified && (msg.contains('expired') || msg.contains('invalid'))) {
+      if (!otpVerified && (code == 'otp_expired' || msg.contains('expired'))) {
         _otpCtrl.clear();
         setState(() => _codeExpired = true);
-        _showError('That code has expired — tap “Send a new code” below.');
+        _showError('That code has expired. Tap resend below.');
+      } else if (!otpVerified && msg.contains('invalid')) {
+        _otpCtrl.clear();
+        setState(() => _codeExpired = false);
+        _showError(
+          'That code is no longer valid. Use the most recent email we sent or tap resend below.',
+        );
       } else {
         _showError(e.message);
       }
@@ -119,7 +126,9 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
       await SupabaseAuthService().resendOtp(email: normalizedEmail);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A new code has been sent to your email.')),
+        const SnackBar(
+          content: Text('We resent the confirmation email to your inbox.'),
+        ),
       );
       setState(() {
         _codeExpired = false;
@@ -275,7 +284,7 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Your code has expired. Request a new one below.',
+                        'Your code has expired. Resend the email below.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.orange.shade800,
@@ -326,12 +335,12 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
                       )
                     : const Icon(Icons.refresh_rounded, size: 18),
                 label: _resending
-                    ? const Text('Sending new code…')
+                  ? const Text('Resending email…')
                     : _resendCooldown > 0
-                        ? Text('Resend in ${_resendCooldown}s',
+                    ? Text('Resend email in ${_resendCooldown}s',
                             style: const TextStyle(
                                 color: AppColors.textSecondary))
-                        : const Text('Send a new code'),
+                    : const Text('Resend email'),
               ),
             ),
             const SizedBox(height: 24),

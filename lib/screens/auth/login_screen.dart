@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -37,7 +38,15 @@ class _LoginScreenState extends State<LoginScreen>
     _tabCtrl = TabController(length: 2, vsync: this);
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedIn && mounted) {
-        _handleOAuthSignIn();
+        // Only handle OAuth (Google, etc.) sign-ins here.
+        // Email/OTP verifications also fire signedIn but are handled by
+        // OtpScreen directly — letting them through would show the
+        // "One more step" sheet prematurely.
+        final provider =
+            data.session?.user.appMetadata['provider']?.toString();
+        if (provider != null && provider != 'email') {
+          _handleOAuthSignIn();
+        }
       }
     });
   }
@@ -115,11 +124,20 @@ class _LoginScreenState extends State<LoginScreen>
                       onPressed: sending
                           ? null
                           : () async {
+                              final email = emailCtrl.text.trim();
+                              if (email.isEmpty || !email.contains('@')) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Enter a valid email address'),
+                                  ),
+                                );
+                                return;
+                              }
                               setLS(() => sending = true);
                               try {
                                 await context
                                     .read<AuthProvider>()
-                                    .sendPasswordReset(emailCtrl.text);
+                                    .sendPasswordReset(email);
                                 setLS(() {
                                   sending = false;
                                   sent = true;
@@ -232,89 +250,136 @@ class _LoginScreenState extends State<LoginScreen>
     final auth = context.read<AuthProvider>();
     final hasHousehold = await auth.loadAfterOAuth();
     if (!mounted) return;
-    if (hasHousehold) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
-        (_) => false,
+    if (!hasHousehold) {
+      // First-time Google user — create household with a default name.
+      // The owner will be nudged to complete details from the left panel.
+      final firstName = (auth.currentUser?.fullName ?? '').split(' ').first;
+      final defaultName =
+          firstName.isNotEmpty ? "$firstName's Home" : 'My Home';
+      await auth.completeOwnerSetup(
+        fullName: auth.currentUser?.fullName ?? 'Owner',
+        email: auth.currentUser?.email ?? '',
+        householdName: defaultName,
       );
-    } else {
-      // First-time Google user – ask for household name
-      _showHouseholdSetupSheet(auth);
+      if (!mounted) return;
+      final managerCode = auth.managerInviteCode;
+      final homeownerCode = auth.homeownerInviteCode;
+      if (managerCode.isNotEmpty || homeownerCode.isNotEmpty) {
+        await _showInviteCodes(
+          managerInviteCode: managerCode,
+          homeownerInviteCode: homeownerCode,
+        );
+      }
     }
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const MainShell()),
+      (_) => false,
+    );
   }
 
-  void _showHouseholdSetupSheet(AuthProvider auth) {
-    final nameCtrl = TextEditingController();
-    final addressCtrl = TextEditingController();
-    showModalBottomSheet(
+
+
+  Future<void> _showInviteCodes({
+    required String managerInviteCode,
+    required String homeownerInviteCode,
+  }) async {
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surfaceLight,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text(
+          'Your household is ready',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('One more step',
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
-            const SizedBox(height: 6),
-            const Text('Give your household a name and delivery address to get started.',
-                style: TextStyle(color: AppColors.textSecondary)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: nameCtrl,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Household name (e.g. The Kamau Home)',
-                prefixIcon: Icon(Icons.home_outlined),
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: addressCtrl,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Delivery address',
-                prefixIcon: Icon(Icons.location_on_outlined),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
+            Container(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final name = nameCtrl.text.trim();
-                  final address = addressCtrl.text.trim();
-                  if (name.isEmpty || address.isEmpty) return;
-                  Navigator.pop(ctx);
-                  await auth.completeOwnerSetup(
-                    fullName: auth.currentUser?.fullName ?? 'Owner',
-                    email: auth.currentUser?.email ?? '',
-                    householdName: name,
-                    deliveryAddress: address,
-                  );
-                  if (!mounted) return;
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MainShell()),
-                    (_) => false,
-                  );
-                },
-                child: const Text('Continue'),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: const Text(
+                'Share each code with the right person during sign-up. You can always find them again later from Household access.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (managerInviteCode.isNotEmpty)
+              _InviteCodeCard(
+                label: 'Manager sign-up code',
+                code: managerInviteCode,
+                helper: 'Share this with the person joining as your house manager.',
+                backgroundColor: AppColors.statusVeryLow,
+                borderColor: AppColors.accentOrange.withValues(alpha: 0.22),
+                labelColor: AppColors.accentOrange,
+              ),
+            if (managerInviteCode.isNotEmpty && homeownerInviteCode.isNotEmpty)
+              const SizedBox(height: 12),
+            if (homeownerInviteCode.isNotEmpty)
+              _InviteCodeCard(
+                label: 'Additional homeowner code',
+                code: homeownerInviteCode,
+                helper: 'Share this with another homeowner joining the same household.',
+                backgroundColor: AppColors.surfaceLight,
+                borderColor: AppColors.divider,
+                labelColor: AppColors.textSecondary,
+              ),
+            const SizedBox(height: 8),
+            const Text(
+              'You can also copy the codes now and send them later when needed.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: AppColors.textSecondary,
               ),
             ),
           ],
         ),
+        actions: [
+          if (managerInviteCode.isNotEmpty)
+            TextButton.icon(
+              icon: const Icon(Icons.copy_outlined),
+              label: const Text('Copy manager code'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: managerInviteCode));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Manager invite code copied.')),
+                );
+              },
+            ),
+          if (homeownerInviteCode.isNotEmpty)
+            TextButton.icon(
+              icon: const Icon(Icons.copy_outlined),
+              label: const Text('Copy homeowner code'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: homeownerInviteCode));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Homeowner invite code copied.')),
+                );
+              },
+            ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Continue'),
+          ),
+        ],
       ),
     );
   }
@@ -593,4 +658,76 @@ class _GooglePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _InviteCodeCard extends StatelessWidget {
+  final String label;
+  final String code;
+  final String helper;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color labelColor;
+
+  const _InviteCodeCard({
+    required this.label,
+    required this.code,
+    required this.helper,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.labelColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: labelColor,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Text(
+              code,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            helper,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

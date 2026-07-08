@@ -69,7 +69,7 @@ create index if not exists ad_offers_placement_active_order_idx
 
 -- ============================================================
 -- SEED DATA
--- 4 best-value Naivas offers + 4 best-value Carrefour offers.
+-- 5 current Naivas offers + 5 current Carrefour offers.
 -- Prices in KES cents (KES 1,199 → 119900).
 -- ============================================================
 
@@ -81,77 +81,105 @@ values
     'ad000000-0000-0000-0000-000000000001',
     'Naivas',
     '#1B8A4A',
-    'Sunrice Basmati Rice 5kg',
-    182500,   -- KES 1,825
-    119900,   -- KES 1,199  (34% off)
-    'KES', 'home', true, 1, 'Dry Foods & Cereals'
+    'Naivas Fino UHT Milk 500ML',
+    5200,     -- KES 52
+    4900,     -- KES 49
+    'KES', 'home', true, 1, 'Dairy & Eggs'
   ),
   (
     'ad000000-0000-0000-0000-000000000002',
     'Naivas',
     '#1B8A4A',
-    'Jamii Pure Mwea Pishori Rice 5Kg',
-    145000,   -- KES 1,450
-    99900,    -- KES 999    (31% off)
-    'KES', 'home', true, 2, 'Dry Foods & Cereals'
+    'Celine Petals Tissue 10 Pack',
+    44500,    -- KES 445
+    22500,    -- KES 225
+    'KES', 'home', true, 2, 'Personal Care'
   ),
   (
     'ad000000-0000-0000-0000-000000000003',
     'Naivas',
     '#1B8A4A',
-    'Highlands Lemon Drink 2L',
-    34900,    -- KES 349
-    24900,    -- KES 249    (28% off)
-    'KES', 'home', true, 3, 'Breakfast Staples'
+    'Celine Serviettes 100 Sheets',
+    14000,    -- KES 140
+    9900,     -- KES 99
+    'KES', 'home', true, 3, 'Kitchen Cleaning'
   ),
   (
     'ad000000-0000-0000-0000-000000000004',
     'Naivas',
     '#1B8A4A',
-    'Rina Vegetable Oil 5 Ltr',
+    'Sunrice Basmati Rice 5Kg',
+    182500,   -- KES 1,825
+    129900,   -- KES 1,299
+    'KES', 'home', true, 4, 'Dry Foods & Cereals'
+  ),
+  (
+    'ad000000-0000-0000-0000-000000000005',
+    'Naivas',
+    '#1B8A4A',
+    'Rina Vegetable Oil 5L',
     160000,   -- KES 1,600
-    119900,   -- KES 1,199  (25% off)
-    'KES', 'home', true, 4, 'Cooking Essentials'
+    139900,   -- KES 1,399
+    'KES', 'home', true, 5, 'Cooking Essentials'
   ),
 
   -- ── Carrefour (brand red #E2001A) ───────────────────────────────────────
   (
-    'ad000000-0000-0000-0000-000000000005',
-    'Carrefour',
-    '#E2001A',
-    'Velvex Hand Wash Floral 400ML',
-    22000,    -- KES 220
-    13200,    -- KES 132    (40% off)
-    'KES', 'home', true, 5, 'Personal Care'
-  ),
-  (
     'ad000000-0000-0000-0000-000000000006',
     'Carrefour',
     '#E2001A',
-    'Persil Hand Wash Powder Rose 500G',
-    25500,    -- KES 255
-    15300,    -- KES 153    (40% off)
-    'KES', 'home', true, 6, 'Laundry & Cleaning'
+    'Fresh Chicken Drumsticks (per kg)',
+    87900,    -- KES 879
+    64900,    -- KES 649
+    'KES', 'home', true, 6, 'Meat & Protein'
   ),
   (
     'ad000000-0000-0000-0000-000000000007',
     'Carrefour',
     '#E2001A',
-    'Ariel Liquid Auto Wash Original 3L',
-    219900,   -- KES 2,199
-    148500,   -- KES 1,485  (32% off)
-    'KES', 'home', true, 7, 'Laundry & Cleaning'
+    'Softleaf Virgin Toilet Paper Unwrap x10',
+    55700,    -- KES 557
+    38900,    -- KES 389
+    'KES', 'home', true, 7, 'Personal Care'
   ),
   (
     'ad000000-0000-0000-0000-000000000008',
     'Carrefour',
     '#E2001A',
-    'Daima Butter Salted 500G',
-    77000,    -- KES 770
-    57500,    -- KES 575    (25% off)
-    'KES', 'home', true, 8, 'Dairy & Eggs'
+    'Velvex Toilet Rolls White x10',
+    57700,    -- KES 577
+    40300,    -- KES 403
+    'KES', 'home', true, 8, 'Personal Care'
+  ),
+  (
+    'ad000000-0000-0000-0000-000000000009',
+    'Carrefour',
+    '#E2001A',
+    'Clorox Lemon Liquid 750ML',
+    41500,    -- KES 415
+    29000,    -- KES 290
+    'KES', 'home', true, 9, 'Laundry & Cleaning'
+  ),
+  (
+    'ad000000-0000-0000-0000-000000000010',
+    'Carrefour',
+    '#E2001A',
+    'Huggies Dry Comfort Diapers Jumbo',
+    208900,   -- KES 2,089
+    146200,   -- KES 1,462
+    'KES', 'home', true, 10, 'Baby & Kids'
   )
-on conflict (id) do nothing;
+on conflict (id) do update
+set advertiser = excluded.advertiser,
+    accent_hex = excluded.accent_hex,
+    product_name = excluded.product_name,
+    old_price_cents = excluded.old_price_cents,
+    new_price_cents = excluded.new_price_cents,
+    currency = excluded.currency,
+    placement = excluded.placement,
+    is_active = excluded.is_active,
+    display_order = excluded.display_order,
+    category = excluded.category;
 
 -- ============================================================
 -- DONE

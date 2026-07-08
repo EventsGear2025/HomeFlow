@@ -128,8 +128,6 @@ class _FakeAuthProvider extends AuthProvider {
     required String email,
     required String password,
     required String householdName,
-    required String deliveryAddress,
-    String? deliveryPhone,
   }) async {
     return ownerNeedsEmailConfirmation;
   }
@@ -139,7 +137,7 @@ class _FakeAuthProvider extends AuthProvider {
     required String fullName,
     required String email,
     required String householdName,
-    required String deliveryAddress,
+    String deliveryAddress = '',
     String? deliveryPhone,
   }) async {
     ownerSetupCalls += 1;

@@ -15,6 +15,16 @@ class SupabaseAuthService {
   static bool? _cachedAdminAccess;
 
   static bool isRateLimitError(Object error) {
+    if (error is AuthException) {
+      final code = error.code?.toLowerCase();
+      final statusCode = error.statusCode?.toLowerCase();
+      if (code == 'over_email_send_rate_limit' ||
+          code == 'over_request_rate_limit' ||
+          statusCode == '429') {
+        return true;
+      }
+    }
+
     final message = error.toString().toLowerCase();
     return message.contains('rate limit') ||
         message.contains('too many requests') ||

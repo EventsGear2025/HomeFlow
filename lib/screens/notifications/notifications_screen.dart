@@ -59,17 +59,81 @@ class NotificationsScreen extends StatelessWidget {
               title: 'No notifications yet',
               subtitle: 'Alerts about your household will appear here',
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: notifications.length,
-              itemBuilder: (_, i) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _NotificationCard(
-                  notification: notifications[i],
-                  householdId: householdId,
-                ),
-              ),
+          : _GroupedNotificationList(
+              notifications: notifications,
+              householdId: householdId,
             ),
+    );
+  }
+}
+
+class _GroupedNotificationList extends StatelessWidget {
+  final List<AppNotification> notifications;
+  final String householdId;
+  const _GroupedNotificationList({
+    required this.notifications,
+    required this.householdId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    final todayItems = notifications
+        .where((n) => _dayOf(n.createdAt).isAtSameMomentAs(today))
+        .toList();
+    final yesterdayItems = notifications
+        .where((n) => _dayOf(n.createdAt).isAtSameMomentAs(yesterday))
+        .toList();
+    final earlierItems = notifications
+        .where((n) => _dayOf(n.createdAt).isBefore(yesterday))
+        .toList();
+
+    final items = <Widget>[];
+
+    void addGroup(String label, List<AppNotification> group) {
+      if (group.isEmpty) return;
+      items.add(_DateHeader(label: label));
+      for (final n in group) {
+        items.add(Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _NotificationCard(notification: n, householdId: householdId),
+        ));
+      }
+    }
+
+    addGroup('Today', todayItems);
+    addGroup('Yesterday', yesterdayItems);
+    addGroup('Earlier', earlierItems);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: items,
+    );
+  }
+
+  DateTime _dayOf(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+}
+
+class _DateHeader extends StatelessWidget {
+  final String label;
+  const _DateHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
+          letterSpacing: 0.6,
+        ),
+      ),
     );
   }
 }

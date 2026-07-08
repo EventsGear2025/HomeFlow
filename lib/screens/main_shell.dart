@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_model.dart';
+import '../models/household_model.dart';
 import '../providers/supply_provider.dart';
 import '../providers/meal_provider.dart';
 import '../providers/laundry_provider.dart';
@@ -34,6 +35,7 @@ class _MainShellState extends State<MainShell>
   with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _isLoading = true;
+  bool _hasError = false;
 
   // Tab indices: 0=Home 1=Supplies 2=Shopping 3=Laundry 4=Meals 5=Kids
   List<Widget> get _screens => [
@@ -71,7 +73,10 @@ class _MainShellState extends State<MainShell>
 
   Future<void> _loadData({bool showLoader = true}) async {
     if (showLoader && mounted) {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+      });
     }
 
     final auth = context.read<AuthProvider>();
@@ -110,19 +115,22 @@ class _MainShellState extends State<MainShell>
       displayEmail: auth.currentUser?.email,
     );
 
-    await Future.wait([
-      supplyProvider.loadData(householdId),
-      mealProvider.loadData(householdId),
-      childProvider.loadData(householdId),
-      laundryProvider.loadData(householdId),
-      staffProvider.loadData(householdId),
-      utilityProvider.loadData(householdId),
-      taskProvider.loadData(householdId),
-      timetableProvider.loadData(householdId),
-      notificationProvider.loadData(householdId),
-    ]);
-
-    if (mounted) setState(() => _isLoading = false);
+    try {
+      await Future.wait([
+        supplyProvider.loadData(householdId),
+        mealProvider.loadData(householdId),
+        childProvider.loadData(householdId),
+        laundryProvider.loadData(householdId),
+        staffProvider.loadData(householdId),
+        utilityProvider.loadData(householdId),
+        taskProvider.loadData(householdId),
+        timetableProvider.loadData(householdId),
+        notificationProvider.loadData(householdId),
+      ]);
+      if (mounted) setState(() => _isLoading = false);
+    } catch (_) {
+      if (mounted) setState(() { _isLoading = false; _hasError = true; });
+    }
   }
 
   @override
@@ -174,6 +182,55 @@ class _MainShellState extends State<MainShell>
                 ),
               ),
             ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Scaffold(
+        backgroundColor: AppColors.surfaceLight,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.wifi_off_rounded,
+                    size: 56,
+                    color: AppColors.textHint,
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Couldn\'t load your household',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Check your internet connection and try again.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 28),
+                  ElevatedButton.icon(
+                    onPressed: _loadData,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Try again'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -340,6 +397,53 @@ class _AccountDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
+                  // Nudge owners whose household setup is incomplete
+                  if (isOwner && _householdSetupIncomplete(household))
+                    GestureDetector(
+                      onTap: () => _showProfileSheet(context),
+                      child: Container(
+                        margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.statusVeryLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.accentOrange.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.edit_note_outlined,
+                                color: AppColors.accentOrange, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Complete your household setup',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.accentOrange,
+                                    ),
+                                  ),
+                                  Text(
+                                    _householdSetupHint(household),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: AppColors.accentOrange, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
                   _DrawerSection(
                     title: 'Account',
                     children: [
@@ -460,6 +564,28 @@ class _AccountDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static bool _householdSetupIncomplete(HouseholdModel? household) {
+    if (household == null) return false;
+    final nameIsDefault = household.householdName.trim().endsWith("'s Home") ||
+        household.householdName.trim() == 'My Home';
+    final missingAddress =
+        (household.deliveryAddress ?? '').trim().isEmpty;
+    return nameIsDefault || missingAddress;
+  }
+
+  static String _householdSetupHint(HouseholdModel? household) {
+    if (household == null) return 'Tap to complete your household profile';
+    final nameIsDefault = household.householdName.trim().endsWith("'s Home") ||
+        household.householdName.trim() == 'My Home';
+    final missingAddress =
+        (household.deliveryAddress ?? '').trim().isEmpty;
+    if (nameIsDefault && missingAddress) {
+      return 'Set your household name and delivery address';
+    }
+    if (nameIsDefault) return 'Give your household a custom name';
+    return 'Add your delivery address';
   }
 
   void _showProfileSheet(BuildContext context) {
@@ -914,12 +1040,96 @@ class _ManageHomeManagerSheet extends StatefulWidget {
 class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  bool _regeneratingManager = false;
+  bool _regeneratingHomeowner = false;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _regenerateManager(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Regenerate manager code?'),
+        content: const Text(
+          'The old code will stop working. Anyone who has already joined as manager is not affected.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Regenerate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _regeneratingManager = true);
+    try {
+      await context.read<AuthProvider>().regenerateManagerCode();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Manager sign-up code updated ✓')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _regeneratingManager = false);
+    }
+  }
+
+  Future<void> _regenerateHomeowner(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Regenerate homeowner code?'),
+        content: const Text(
+          'The old code will stop working. Anyone who has already joined as homeowner is not affected.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Regenerate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _regeneratingHomeowner = true);
+    try {
+      await context.read<AuthProvider>().regenerateHomeownerCode();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Additional homeowner code updated ✓')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _regeneratingHomeowner = false);
+    }
   }
 
   @override
@@ -982,6 +1192,21 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
                       icon: const Icon(Icons.copy_outlined, size: 16),
                       label: const Text('Copy'),
                     ),
+                    if (_regeneratingManager)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      TextButton.icon(
+                        onPressed: () => _regenerateManager(context),
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('New code'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.accentOrange,
+                        ),
+                      ),
                   ],
                 ),
                 const Text(
@@ -1051,6 +1276,21 @@ class _ManageHomeManagerSheetState extends State<_ManageHomeManagerSheet> {
                       icon: const Icon(Icons.copy_outlined, size: 16),
                       label: const Text('Copy'),
                     ),
+                    if (_regeneratingHomeowner)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      TextButton.icon(
+                        onPressed: () => _regenerateHomeowner(context),
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('New code'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primaryTeal,
+                        ),
+                      ),
                   ],
                 ),
                 const Text(
@@ -1332,7 +1572,7 @@ class _JoinHouseholdSheetState extends State<_JoinHouseholdSheet> {
   Widget build(BuildContext context) {
     return _SheetShell(
       title: 'Join household',
-      subtitle: 'Enter the homeowner\'s 8-character invite code to link this manager account.',
+      subtitle: 'Enter the 8-character manager sign-up code the homeowner shared with you.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1343,7 +1583,7 @@ class _JoinHouseholdSheetState extends State<_JoinHouseholdSheet> {
             enableSuggestions: false,
             maxLength: 8,
             decoration: const InputDecoration(
-              labelText: 'Homeowner invite code',
+              labelText: 'Manager sign-up code',
               prefixIcon: Icon(Icons.vpn_key_outlined),
               hintText: 'e.g. A1B2C3D4',
               counterText: '',
@@ -1411,7 +1651,7 @@ class _NoHouseholdBody extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Your manager account is ready. Open the left menu and tap Join household, or use the button below, then enter the homeowner\'s 8-character invite code.',
+                  'Your manager account is ready. Open the left menu and tap Join household, or use the button below, then enter the 8-character manager sign-up code the homeowner gave you.',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
@@ -1424,7 +1664,7 @@ class _NoHouseholdBody extends StatelessWidget {
                   child: ElevatedButton.icon(
                     onPressed: () => showJoinHouseholdSheet(context),
                     icon: const Icon(Icons.vpn_key_outlined),
-                    label: const Text('Enter invite code'),
+                    label: const Text('Enter manager code'),
                   ),
                 ),
               ],

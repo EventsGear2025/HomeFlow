@@ -345,6 +345,9 @@ class _SuppliesScreenState extends State<SuppliesScreen>
         s.unitType.toLowerCase().contains(q);
       }).toList();
 
+  final hasSupplyFilters =
+      _searchQuery.trim().isNotEmpty || _selectedCategory != 'All';
+
   searched.sort((a, b) {
       final aScore = _statusScore(a.status);
       final bScore = _statusScore(b.status);
@@ -506,11 +509,22 @@ class _SuppliesScreenState extends State<SuppliesScreen>
             child: supply.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : (_utilitySearchResults.isEmpty && searched.isEmpty)
-                    ? const EmptyStateWidget(
+                ? EmptyStateWidget(
                         icon: Icons.inventory_2_outlined,
-                        title: 'No matching supplies',
-                        subtitle:
-                            'Try a different name, category, or unit type',
+                  title: hasSupplyFilters
+                    ? 'No matching supplies'
+                    : 'No supplies added yet',
+                  subtitle: hasSupplyFilters
+                    ? 'Try a different name, category, or unit type'
+                    : auth.isOwner
+                      ? 'Add your first household supply to start tracking stock levels and shopping needs.'
+                      : 'Supplies will appear here once the household owner adds them.',
+                  buttonLabel: !hasSupplyFilters && auth.isOwner
+                    ? 'Add Supply'
+                    : null,
+                  onButton: !hasSupplyFilters && auth.isOwner
+                    ? () => _showAddSupplySheet(context)
+                    : null,
                       )
                     : ListView(
                         padding: const EdgeInsets.all(16),
