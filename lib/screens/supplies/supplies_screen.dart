@@ -976,7 +976,7 @@ class _UsageTrendsCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryTeal.withOpacity(0.12),
+                  color: AppColors.primaryTeal.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
@@ -2168,11 +2168,27 @@ class _ElecPrepaidCard extends StatelessWidget {
                       label:
                           'Last top-up KSh ${latestPurchase.amountSpent.toStringAsFixed(0)} · ${latestPurchase.unitsBought.toStringAsFixed(0)} kWh',
                     ),
+                  if (elec.electricityTokenUnitsThisMonth > 0)
+                    _InfoChip(
+                      icon: Icons.calendar_view_month_outlined,
+                      label:
+                          'This month KSh ${elec.electricityTokenSpendThisMonth.toStringAsFixed(0)} · ${elec.electricityTokenUnitsThisMonth.toStringAsFixed(0)} kWh',
+                    ),
+                  if (elec.electricityTokenUnitsThisYear > 0)
+                    _InfoChip(
+                      icon: Icons.insights_outlined,
+                      label:
+                          'This year KSh ${elec.electricityTokenSpendThisYear.toStringAsFixed(0)} · ${elec.electricityTokenUnitsThisYear.toStringAsFixed(0)} kWh',
+                    ),
+                  if (elec.electricityAccountRef != null)
+                    _InfoChip(
+                      icon: Icons.pin_outlined,
+                      label: 'Meter no. ${elec.electricityAccountRef}',
+                    ),
                   if (elec.electricityPaybill != null)
                     _InfoChip(
                       icon: Icons.phone_android_outlined,
-                      label:
-                          'Paybill ${elec.electricityPaybill}${elec.electricityAccountRef != null ? ' · ${elec.electricityAccountRef}' : ''}',
+                      label: 'Paybill ${elec.electricityPaybill}',
                     ),
                 ],
               ),
@@ -2264,9 +2280,6 @@ class _ElecPrepaidCard extends StatelessWidget {
     final amountCtrl = TextEditingController(
         text: elec.typicalTokenAmount?.toStringAsFixed(0) ?? '');
     final unitsCtrl = TextEditingController();
-    final balanceCtrl = TextEditingController(
-      text: elec.unitsRemaining?.toStringAsFixed(0) ?? '',
-    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2284,14 +2297,15 @@ class _ElecPrepaidCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Token Top-Up',
+                Text('Log Token Purchase',
                     style: Theme.of(ctx).textTheme.titleMedium),
                 IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(ctx)),
               ],
             ),
-            const Text('Record the amount spent, units bought, and the balance after top-up.',
+            const Text(
+                'Just log the amount spent and units bought — today\'s date is recorded automatically.',
                 style:
                     TextStyle(fontSize: 13, color: AppColors.textSecondary)),
             const SizedBox(height: 14),
@@ -2313,15 +2327,6 @@ class _ElecPrepaidCard extends StatelessWidget {
                 suffixText: 'kWh',
               ),
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: balanceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Balance after top-up',
-                suffixText: 'kWh',
-              ),
-            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -2329,8 +2334,6 @@ class _ElecPrepaidCard extends StatelessWidget {
                 onPressed: () {
                   final amountSpent = double.tryParse(amountCtrl.text.trim());
                   final unitsBought = double.tryParse(unitsCtrl.text.trim());
-                  final balanceAfterTopUp =
-                      double.tryParse(balanceCtrl.text.trim());
                   if (amountSpent == null || amountSpent <= 0) return;
                   if (unitsBought == null || unitsBought <= 0) return;
                   final auth = ctx.read<AuthProvider>();
@@ -2339,7 +2342,6 @@ class _ElecPrepaidCard extends StatelessWidget {
                     auth.household!.id,
                     unitsBought,
                     amountSpent: amountSpent,
-                    balanceAfterPurchase: balanceAfterTopUp,
                   );
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2848,8 +2850,9 @@ class _ElecSetupSheetState extends State<_ElecSetupSheet> {
               controller: _accountCtrl,
               keyboardType: TextInputType.text,
               decoration: const InputDecoration(
-                labelText: 'Account / meter number',
+                labelText: 'KPLC meter number',
                 hintText: 'e.g. 123456789',
+                helperText: 'Used as the M-Pesa account reference when paying via paybill',
               ),
             ),
             const SizedBox(height: 20),
@@ -3995,12 +3998,32 @@ class _WaterStatusCard extends StatelessWidget {
           // ── Last delivery ─────────────────────────────────────
           if (water.lastDeliveredAt != null) ...[
             const SizedBox(height: 10),
-            Text(
-              'Last delivered: ${_fmtDate(water.lastDeliveredAt!)}',
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textHint),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Last delivered: ${_fmtDate(water.lastDeliveredAt!)}',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textHint),
+                ),
+                if (canManage) ...[
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) =>
+                          _WaterEditDeliveryDateSheet(water: water),
+                    ),
+                    child: const Icon(Icons.edit_outlined,
+                        size: 13, color: AppColors.textHint),
+                  ),
+                ],
+              ],
             ),
           ],
+
 
           // ── Edit button (owner) ───────────────────────────────
           if (canManage) ...[
@@ -4178,47 +4201,11 @@ class _WaterActionsRow extends StatelessWidget {
   }
 
   void _confirmDelivery(BuildContext context) {
-    final qty = water.typicalOrderQuantity ?? water.totalContainers ?? 2;
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Record Delivery'),
-        content: Text(
-          'Record delivery of $qty bottle${qty == 1 ? '' : 's'}? '
-          'This will reset your full-bottle count and mark payment as unpaid.',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryTeal,
-              minimumSize: const Size(0, 40),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.read<UtilityProvider>().recordDrinkingWaterDelivery(
-                    itemId: water.id,
-                    householdId: auth.household!.id,
-                    quantityDelivered: qty,
-                    paymentStatus: UtilityPaymentStatus.unpaid,
-                  );
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Delivery recorded — remember to pay supplier'),
-                  backgroundColor: AppColors.primaryTeal,
-                ),
-              );
-            },
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _WaterDeliveryDateSheet(water: water),
     );
   }
 
@@ -4271,6 +4258,363 @@ class _WaterActionsRow extends StatelessWidget {
               );
             },
             child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WATER DELIVERY DATE SHEET — lets user pick the actual delivery/bought
+// date instead of always defaulting to "now" when recording a delivery.
+// ─────────────────────────────────────────────────────────────────────
+
+class _WaterDeliveryDateSheet extends StatefulWidget {
+  final UtilityTracker water;
+  const _WaterDeliveryDateSheet({required this.water});
+
+  @override
+  State<_WaterDeliveryDateSheet> createState() =>
+      _WaterDeliveryDateSheetState();
+}
+
+class _WaterDeliveryDateSheetState extends State<_WaterDeliveryDateSheet> {
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = DateTime.now();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now,
+      helpText: 'When was the water bought/delivered?',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: AppColors.primaryTeal,
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  String _formatDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final day = DateTime(d.year, d.month, d.day);
+    if (day == today) return 'Today';
+    if (day == yesterday) return 'Yesterday';
+    final months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final water = widget.water;
+    final qty = water.typicalOrderQuantity ?? water.totalContainers ?? 2;
+    final isToday = DateTime(
+            _selectedDate.year, _selectedDate.month, _selectedDate.day) ==
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text('Record Water Delivery',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 6),
+          Text(
+            'Record delivery of $qty bottle${qty == 1 ? '' : 's'}. '
+            'Pick the actual bought/delivered date even if you forgot to log it earlier. '
+            'This will reset your full-bottle count and mark payment as unpaid.',
+            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 20),
+
+          // Date selector row
+          GestureDetector(
+            onTap: _pickDate,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.primaryTeal, width: 1.5),
+                borderRadius: BorderRadius.circular(12),
+                color: AppColors.primaryTeal.withValues(alpha: 0.05),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_outlined,
+                      size: 18, color: AppColors.primaryTeal),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _formatDate(_selectedDate),
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textSecondary),
+                ],
+              ),
+            ),
+          ),
+
+          if (!isToday) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => setState(() => _selectedDate = DateTime.now()),
+              child: const Text('Use today instead',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.primaryTeal,
+                      fontWeight: FontWeight.w500)),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryTeal,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                final utilProv = context.read<UtilityProvider>();
+                final auth = context.read<AuthProvider>();
+                utilProv.recordDrinkingWaterDelivery(
+                  itemId: water.id,
+                  householdId: auth.household!.id,
+                  quantityDelivered: qty,
+                  deliveredAt: _selectedDate,
+                  paymentStatus: UtilityPaymentStatus.unpaid,
+                );
+                final label = isToday
+                    ? 'Delivery recorded — remember to pay supplier'
+                    : 'Delivery logged for ${_formatDate(_selectedDate)} — remember to pay supplier';
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(label),
+                      backgroundColor: AppColors.primaryTeal),
+                );
+              },
+              child: const Text('Save Delivery',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WATER EDIT DELIVERY DATE SHEET — correct an already-logged delivery
+// date without resetting bottle counts or payment status.
+// ─────────────────────────────────────────────────────────────────────
+
+class _WaterEditDeliveryDateSheet extends StatefulWidget {
+  final UtilityTracker water;
+  const _WaterEditDeliveryDateSheet({required this.water});
+
+  @override
+  State<_WaterEditDeliveryDateSheet> createState() =>
+      _WaterEditDeliveryDateSheetState();
+}
+
+class _WaterEditDeliveryDateSheetState
+    extends State<_WaterEditDeliveryDateSheet> {
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.water.lastDeliveredAt ?? DateTime.now();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now,
+      helpText: 'When was the water actually bought/delivered?',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: AppColors.primaryTeal,
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  String _formatDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final day = DateTime(d.year, d.month, d.day);
+    if (day == today) return 'Today';
+    if (day == yesterday) return 'Yesterday';
+    final months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text('Edit Last Delivered Date',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 6),
+          const Text(
+              'Correct the bought/delivered date. This won\'t change your bottle counts or payment status.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const SizedBox(height: 20),
+
+          // Date selector row
+          GestureDetector(
+            onTap: _pickDate,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.primaryTeal, width: 1.5),
+                borderRadius: BorderRadius.circular(12),
+                color: AppColors.primaryTeal.withValues(alpha: 0.05),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_outlined,
+                      size: 18, color: AppColors.primaryTeal),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _formatDate(_selectedDate),
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textSecondary),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryTeal,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                final utilProv = context.read<UtilityProvider>();
+                final auth = context.read<AuthProvider>();
+                utilProv.updateDrinkingWaterDeliveryDate(
+                  widget.water.id,
+                  auth.household!.id,
+                  _selectedDate,
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content:
+                        Text('Delivery date updated to ${_formatDate(_selectedDate)} ✓'),
+                    backgroundColor: AppColors.primaryTeal,
+                  ),
+                );
+              },
+              child: const Text('Save Date',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            ),
           ),
         ],
       ),

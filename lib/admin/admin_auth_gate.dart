@@ -95,6 +95,114 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     }
   }
 
+  Future<void> _forgotPassword() async {
+    final emailCtrl = TextEditingController(text: _emailCtrl.text.trim());
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        bool sending = false;
+        bool sent = false;
+        return StatefulBuilder(
+          builder: (ctx, setLS) => AlertDialog(
+            title: const Text('Reset password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!sent) ...[
+                  const Text(
+                    'Enter the email address for your homeFlow account and '
+                    'we\'ll send you a link to reset your password.',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    textCapitalization: TextCapitalization.none,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Email address',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline,
+                          color: Colors.green, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Reset link sent to ${emailCtrl.text.trim()}. Check your inbox (and spam folder).',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+            actions: sent
+                ? [
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Done'),
+                    ),
+                  ]
+                : [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: sending
+                          ? null
+                          : () async {
+                              final email = emailCtrl.text.trim();
+                              if (email.isEmpty || !email.contains('@')) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Enter a valid email address'),
+                                  ),
+                                );
+                                return;
+                              }
+                              setLS(() => sending = true);
+                              try {
+                                await Supabase.instance.client.auth
+                                    .resetPasswordForEmail(email);
+                                setLS(() {
+                                  sending = false;
+                                  sent = true;
+                                });
+                              } catch (e) {
+                                setLS(() => sending = false);
+                                if (!ctx.mounted) return;
+                                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                                  content: Text(e
+                                      .toString()
+                                      .replaceFirst('Exception: ', '')),
+                                  backgroundColor: Colors.red.shade700,
+                                ));
+                              }
+                            },
+                      child: sending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Send reset link'),
+                    ),
+                  ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = _authService.currentSession;
@@ -103,19 +211,24 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Card(
-            elevation: 2,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: Padding(
-              padding: const EdgeInsets.all(40),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      body: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                   // Logo / title
                   Row(
                     children: [
@@ -227,6 +340,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           horizontal: 16, vertical: 14),
                     ),
                   ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _loading ? null : _forgotPassword,
+                      child: const Text('Forgot password?'),
+                    ),
+                  ),
 
                   if (_error != null) ...[
                     const SizedBox(height: 12),
@@ -286,7 +406,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
-                ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

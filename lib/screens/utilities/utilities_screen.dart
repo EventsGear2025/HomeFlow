@@ -1588,7 +1588,7 @@ class _CustomUtilityTabSection extends StatelessWidget {
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, true),
                           child: const Text('Delete',
-                              style: TextStyle(color: Colors.red)),
+                              style: TextStyle(color: AppColors.danger)),
                         ),
                       ],
                     ),

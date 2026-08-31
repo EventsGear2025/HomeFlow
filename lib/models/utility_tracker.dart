@@ -670,20 +670,55 @@ class UtilityTracker {
   }
 
   double get electricityTokenSpendThisMonth {
-    if (type != UtilityType.electricity || isPostpaid) return 0;
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    return electricityTokenPurchases
-        .where((entry) => !entry.date.isBefore(monthStart))
-        .fold<double>(0, (sum, entry) => sum + entry.amountSpent);
+    return electricityTokenSpendForMonth(DateTime.now());
   }
 
   double get electricityTokenUnitsThisMonth {
+    return electricityTokenUnitsForMonth(DateTime.now());
+  }
+
+  /// Total KES spent on tokens during the calendar month containing [month].
+  /// Allows viewing spend for any past month, not just the current one.
+  double electricityTokenSpendForMonth(DateTime month) {
+    if (type != UtilityType.electricity || isPostpaid) return 0;
+    final monthStart = DateTime(month.year, month.month, 1);
+    final monthEnd = DateTime(month.year, month.month + 1, 1);
+    return electricityTokenPurchases
+        .where((entry) =>
+            !entry.date.isBefore(monthStart) && entry.date.isBefore(monthEnd))
+        .fold<double>(0, (sum, entry) => sum + entry.amountSpent);
+  }
+
+  /// Total kWh bought during the calendar month containing [month].
+  double electricityTokenUnitsForMonth(DateTime month) {
+    if (type != UtilityType.electricity || isPostpaid) return 0;
+    final monthStart = DateTime(month.year, month.month, 1);
+    final monthEnd = DateTime(month.year, month.month + 1, 1);
+    return electricityTokenPurchases
+        .where((entry) =>
+            !entry.date.isBefore(monthStart) && entry.date.isBefore(monthEnd))
+        .fold<double>(0, (sum, entry) => sum + entry.unitsBought);
+  }
+
+  /// Total KES spent on tokens so far this calendar year — used as a simple
+  /// consumption proxy (most bought tokens end up consumed over the year).
+  double get electricityTokenSpendThisYear {
     if (type != UtilityType.electricity || isPostpaid) return 0;
     final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
+    final yearStart = DateTime(now.year, 1, 1);
     return electricityTokenPurchases
-        .where((entry) => !entry.date.isBefore(monthStart))
+        .where((entry) => !entry.date.isBefore(yearStart))
+        .fold<double>(0, (sum, entry) => sum + entry.amountSpent);
+  }
+
+  /// Total kWh bought so far this calendar year — used as a simple
+  /// consumption proxy (most bought tokens end up consumed over the year).
+  double get electricityTokenUnitsThisYear {
+    if (type != UtilityType.electricity || isPostpaid) return 0;
+    final now = DateTime.now();
+    final yearStart = DateTime(now.year, 1, 1);
+    return electricityTokenPurchases
+        .where((entry) => !entry.date.isBefore(yearStart))
         .fold<double>(0, (sum, entry) => sum + entry.unitsBought);
   }
 

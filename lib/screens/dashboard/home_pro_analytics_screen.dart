@@ -19,8 +19,35 @@ import '../../widgets/common_widgets.dart';
 // Main screen
 // ─────────────────────────────────────────────
 
-class HomeProAnalyticsScreen extends StatelessWidget {
+class HomeProAnalyticsScreen extends StatefulWidget {
   const HomeProAnalyticsScreen({super.key});
+
+  @override
+  State<HomeProAnalyticsScreen> createState() =>
+      _HomeProAnalyticsScreenState();
+}
+
+class _HomeProAnalyticsScreenState extends State<HomeProAnalyticsScreen> {
+  late DateTime _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month, 1);
+  }
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _selectedMonth.year == now.year && _selectedMonth.month == now.month;
+  }
+
+  void _shiftMonth(int delta) {
+    setState(() {
+      _selectedMonth =
+          DateTime(_selectedMonth.year, _selectedMonth.month + delta, 1);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +67,7 @@ class HomeProAnalyticsScreen extends StatelessWidget {
       utilities: visibleUtilities,
       householdMembers: auth.householdMembers.length,
       childrenCount: children.length,
+      referenceMonth: _selectedMonth,
     );
 
     final urgentTips = report.tips
@@ -180,7 +208,16 @@ class HomeProAnalyticsScreen extends StatelessWidget {
             icon: Icons.analytics_outlined,
             title: 'Deeper Insights',
             summary: 'Weekly outlook · Supply spend · Profile',
-            child: _DeepInsightsContent(report: report, utilities: visibleUtilities),
+            child: _DeepInsightsContent(
+              report: report,
+              utilities: visibleUtilities,
+              hasSupplyPriceHistory: visibleSupplies.any(
+                (item) => item.usageLogs.any((e) => e.price != null && e.price! > 0),
+              ),
+              selectedMonth: _selectedMonth,
+              isCurrentMonth: _isCurrentMonth,
+              onShiftMonth: _shiftMonth,
+            ),
           ),
         ],
       ),
@@ -1151,10 +1188,21 @@ class _RhythmRow extends StatelessWidget {
 // ─────────────────────────────────────────────
 
 class _DeepInsightsContent extends StatelessWidget {
-  const _DeepInsightsContent({required this.report, required this.utilities});
+  const _DeepInsightsContent({
+    required this.report,
+    required this.utilities,
+    required this.hasSupplyPriceHistory,
+    required this.selectedMonth,
+    required this.isCurrentMonth,
+    required this.onShiftMonth,
+  });
 
   final HomeProIntelligenceReport report;
   final List<UtilityTracker> utilities;
+  final bool hasSupplyPriceHistory;
+  final DateTime selectedMonth;
+  final bool isCurrentMonth;
+  final ValueChanged<int> onShiftMonth;
 
   @override
   Widget build(BuildContext context) {
@@ -1191,15 +1239,48 @@ class _DeepInsightsContent extends StatelessWidget {
               rows: report.forecastRows,
             ),
           ),
-          if (report.supplyMonthlySpend.isNotEmpty) ...[
+          if (report.supplyMonthlySpend.isNotEmpty || hasSupplyPriceHistory) ...[
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const _SectionLabel(title: 'Monthly Supply Spend'),
+                  _MonthSelector(
+                    selectedMonth: selectedMonth,
+                    isCurrentMonth: isCurrentMonth,
+                    onShiftMonth: onShiftMonth,
+                  ),
+                ],
+              ),
+            ),
+            if (report.supplyMonthlySpend.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'No priced supply entries logged for this month yet.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _SupplySpendCard(
+                  rows: report.supplyMonthlySpend,
+                  monthLabel: '${_monthLabelFor(selectedMonth.month)} ${selectedMonth.year}',
+                ),
+              ),
+          ],
+          if (report.categorySpendTrends.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: _SectionLabel(title: 'Monthly Supply Spend'),
+              child: _SectionLabel(title: 'Spending Trends'),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _SupplySpendCard(rows: report.supplyMonthlySpend),
+              child: _SpendTrendsCard(trends: report.categorySpendTrends),
             ),
           ],
           if (electricityItems.isNotEmpty) ...[
@@ -1210,7 +1291,10 @@ class _DeepInsightsContent extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _ElectricityTokenInsightsCard(items: electricityItems),
+              child: _ElectricityTokenInsightsCard(
+                items: electricityItems,
+                referenceMonth: selectedMonth,
+              ),
             ),
           ],
           const SizedBox(height: 20),
@@ -1356,9 +1440,13 @@ class _WaterUsageTile extends StatelessWidget {
 }
 
 class _ElectricityTokenInsightsCard extends StatelessWidget {
-  const _ElectricityTokenInsightsCard({required this.items});
+  const _ElectricityTokenInsightsCard({
+    required this.items,
+    required this.referenceMonth,
+  });
 
   final List<UtilityTracker> items;
+  final DateTime referenceMonth;
 
   @override
   Widget build(BuildContext context) {
@@ -1414,8 +1502,8 @@ class _ElectricityTokenInsightsCard extends StatelessWidget {
           const SizedBox(height: 14),
           ...items.map((item) {
             final latest = item.latestElectricityTokenPurchase;
-            final monthSpend = item.electricityTokenSpendThisMonth;
-            final monthUnits = item.electricityTokenUnitsThisMonth;
+            final monthSpend = item.electricityTokenSpendForMonth(referenceMonth);
+            final monthUnits = item.electricityTokenUnitsForMonth(referenceMonth);
             final avgCost = item.electricityAverageCostPerUnit;
             final avgDaily = item.electricityAverageDailyConsumption;
             final daysLeft = item.electricityEstimatedDaysRemaining;
@@ -1457,7 +1545,7 @@ class _ElectricityTokenInsightsCard extends StatelessWidget {
                     runSpacing: 8,
                     children: [
                       _InsightMetricChip(
-                        label: 'This month',
+                        label: '${_monthLabelFor(referenceMonth.month).substring(0, 3)} spend',
                         value: 'KSh ${monthSpend.toStringAsFixed(0)}',
                       ),
                       _InsightMetricChip(
@@ -1630,10 +1718,315 @@ class _OutlookCard extends StatelessWidget {
   }
 }
 
-class _SupplySpendCard extends StatelessWidget {
-  const _SupplySpendCard({required this.rows});
+String _monthLabelFor(int m) {
+  const names = [
+    '', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  return names[m];
+}
+
+/// Lets the user page back through past months to view spend that would
+/// otherwise disappear once the calendar month rolls over.
+class _MonthSelector extends StatelessWidget {
+  const _MonthSelector({
+    required this.selectedMonth,
+    required this.isCurrentMonth,
+    required this.onShiftMonth,
+  });
+
+  final DateTime selectedMonth;
+  final bool isCurrentMonth;
+  final ValueChanged<int> onShiftMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.8)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded, size: 18),
+            color: AppColors.textSecondary,
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
+            tooltip: 'Previous month',
+            onPressed: () => onShiftMonth(-1),
+          ),
+          Text(
+            '${_monthLabelFor(selectedMonth.month).substring(0, 3)} ${selectedMonth.year}',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded, size: 18),
+            color: isCurrentMonth
+                ? AppColors.textHint.withValues(alpha: 0.4)
+                : AppColors.textSecondary,
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
+            tooltip: 'Next month',
+            onPressed: isCurrentMonth ? null : () => onShiftMonth(1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Deeper details behind month spend: multi-month history, % change,
+/// a next-month forecast, and anomaly call-outs per supply category.
+class _SpendTrendsCard extends StatelessWidget {
+  const _SpendTrendsCard({required this.trends});
+
+  final List<CategorySpendTrend> trends;
+
+  Color _directionColor(SpendTrendDirection direction) {
+    switch (direction) {
+      case SpendTrendDirection.rising:
+        return AppColors.accentOrange;
+      case SpendTrendDirection.falling:
+        return AppColors.success;
+      case SpendTrendDirection.newSpend:
+      case SpendTrendDirection.stable:
+        return AppColors.textSecondary;
+    }
+  }
+
+  IconData _directionIcon(SpendTrendDirection direction) {
+    switch (direction) {
+      case SpendTrendDirection.rising:
+        return Icons.trending_up_rounded;
+      case SpendTrendDirection.falling:
+        return Icons.trending_down_rounded;
+      case SpendTrendDirection.newSpend:
+        return Icons.fiber_new_outlined;
+      case SpendTrendDirection.stable:
+        return Icons.trending_flat_rounded;
+    }
+  }
+
+  String _directionLabel(CategorySpendTrend trend) {
+    if (trend.direction == SpendTrendDirection.newSpend) return 'New spend';
+    final pct = trend.percentChange;
+    if (pct == null) return 'Steady';
+    final rounded = pct.round();
+    if (rounded == 0) return 'Steady';
+    return '${rounded > 0 ? '+' : ''}$rounded% vs last month';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final anomalies = trends.where((t) => t.isAnomaly).take(2).toList();
+    final topTrends = trends.take(5).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (anomalies.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Column(
+                children: anomalies
+                    .map(
+                      (trend) => Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.tipAlertBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.tipAlert.withValues(alpha: 0.18)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded,
+                                size: 16, color: AppColors.tipAlert),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                trend.anomalyNote ?? '',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.tipAlert,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ...topTrends.map((trend) {
+            final isLast = trend == topTrends.last;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              trend.category,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Icon(_directionIcon(trend.direction),
+                                    size: 13,
+                                    color: _directionColor(trend.direction)),
+                                const SizedBox(width: 3),
+                                Text(
+                                  _directionLabel(trend),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: _directionColor(trend.direction),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'KES ${trend.currentMonthSpend.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Next mo. est. KES ${trend.forecastNextMonth.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _SpendSparkline(history: trend.history),
+                  const SizedBox(height: 14),
+                  if (!isLast) const Divider(height: 1, color: AppColors.divider),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact bar sparkline of up to 6 months of category spend.
+class _SpendSparkline extends StatelessWidget {
+  const _SpendSparkline({required this.history});
+
+  final List<MonthlySpendPoint> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxAmount =
+        history.fold<double>(0, (m, p) => p.amount > m ? p.amount : m);
+    const barMaxHeight = 32.0;
+
+    return SizedBox(
+      height: barMaxHeight + 18,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: history.map((point) {
+          final isCurrent = point == history.last;
+          final fraction = maxAmount > 0 ? point.amount / maxAmount : 0.0;
+          final barHeight = point.amount > 0
+              ? (fraction * barMaxHeight).clamp(4.0, barMaxHeight)
+              : 2.0;
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    height: barHeight,
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? AppColors.primaryTeal
+                          : AppColors.primaryTeal.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _monthLabelFor(point.month.month).substring(0, 1),
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w400,
+                      color: isCurrent
+                          ? AppColors.primaryTeal
+                          : AppColors.textHint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _SupplySpendCard extends StatefulWidget {
+  const _SupplySpendCard({required this.rows, required this.monthLabel});
 
   final List<SupplySpendRow> rows;
+  final String monthLabel;
+
+  @override
+  State<_SupplySpendCard> createState() => _SupplySpendCardState();
+}
+
+class _SupplySpendCardState extends State<_SupplySpendCard> {
+  static const _collapsedRowCount = 4;
+  bool _expanded = false;
 
   static const _categoryIcons = <String, IconData>{
     'Food & Groceries': Icons.shopping_basket_outlined,
@@ -1664,11 +2057,14 @@ class _SupplySpendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final monthLabel = widget.monthLabel;
     final totalThis = rows.fold<double>(0, (s, r) => s + r.thisMonthSpend);
     final totalLast = rows.fold<double>(0, (s, r) => s + r.lastMonthSpend);
     final maxSpend = rows.fold<double>(0, (s, r) => r.thisMonthSpend > s ? r.thisMonthSpend : s);
-    final now = DateTime.now();
-    final monthLabel = _monthName(now.month);
+    final hasMore = rows.length > _collapsedRowCount;
+    final displayedRows =
+        _expanded || !hasMore ? rows : rows.take(_collapsedRowCount).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -1721,7 +2117,7 @@ class _SupplySpendCard extends StatelessWidget {
           ),
           const Divider(height: 1, color: AppColors.divider),
           // ── Rows ────────────────────────────────────────────────
-          ...rows.map((row) {
+          ...displayedRows.map((row) {
             final barFraction = maxSpend > 0 ? row.thisMonthSpend / maxSpend : 0.0;
             final trendColor = _trendColor(row.thisMonthSpend, row.lastMonthSpend);
             final trendIcon = _trendIcon(row.thisMonthSpend, row.lastMonthSpend);
@@ -1818,12 +2214,42 @@ class _SupplySpendCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  if (row != rows.last)
+                  if (row != displayedRows.last)
                     const Divider(height: 1, color: AppColors.divider),
                 ],
               ),
             );
           }),
+          // ── Show more / less toggle ───────────────────────────────
+          if (hasMore)
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _expanded
+                          ? 'Show less'
+                          : 'Show ${rows.length - _collapsedRowCount} more',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryTeal,
+                      ),
+                    ),
+                    Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: AppColors.primaryTeal,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // ── Totals footer ────────────────────────────────────────
           Container(
             decoration: BoxDecoration(
@@ -1838,7 +2264,7 @@ class _SupplySpendCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Total this month',
+                    'Total for month',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -1878,14 +2304,6 @@ class _SupplySpendCard extends StatelessWidget {
       return k == k.truncateToDouble() ? '${k.toInt()}k' : '${k.toStringAsFixed(1)}k';
     }
     return v.toStringAsFixed(0);
-  }
-
-  String _monthName(int m) {
-    const names = [
-      '', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return names[m];
   }
 
 }

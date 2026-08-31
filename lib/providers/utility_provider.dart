@@ -332,6 +332,22 @@ class UtilityProvider extends ChangeNotifier {
     }
   }
 
+  /// Edit the recorded delivery date for drinking water without touching
+  /// bottle counts or payment status (e.g. correcting a forgotten log entry).
+  Future<void> updateDrinkingWaterDeliveryDate(
+      String itemId, String householdId, DateTime deliveredAt) async {
+    final index = _items.indexWhere((i) => i.id == itemId);
+    if (index != -1) {
+      final item = _items[index];
+      if (!item.isDrinkingWater) return;
+
+      _items[index] = item.copyWith(lastDeliveredAt: deliveredAt);
+      notifyListeners();
+      final prefs = await SharedPreferences.getInstance();
+      await _save(householdId, prefs);
+    }
+  }
+
   Future<void> markDrinkingWaterBottleEmpty(
       String itemId, String householdId) async {
     final index = _items.indexWhere((i) => i.id == itemId);

@@ -1663,18 +1663,48 @@ class AdminRepository {
     List<String> ids,
   ) async {
     if (ids.isEmpty) return const {};
+    final result = <String, Map<String, dynamic>>{};
+
     try {
       final rows = await SupabaseService.client
           .from('profiles')
           .select('id, full_name, email, created_at, updated_at')
           .inFilter('id', ids);
-      return {
-        for (final row in rows as List)
-          row['id'].toString(): Map<String, dynamic>.from(row as Map),
-      };
+      for (final row in rows as List) {
+        result[row['id'].toString()] = Map<String, dynamic>.from(row as Map);
+      }
     } catch (_) {
-      return const {};
+      // 'profiles' may not exist or hold no rows for this app's schema.
     }
+
+    // This app stores display name/email directly on app_household_members
+    // (see SyncService.ensureHouseholdMember) rather than in 'profiles'.
+    // Fill in anything the profiles lookup didn't cover from there.
+    final missingIds = ids.where((id) => !result.containsKey(id)).toList();
+    if (missingIds.isNotEmpty) {
+      try {
+        final memberRows = await SupabaseService.client
+            .from('app_household_members')
+            .select('user_id, full_name, display_email, created_at')
+            .inFilter('user_id', missingIds);
+        for (final row in memberRows as List) {
+          final userId = row['user_id']?.toString();
+          if (userId == null || userId.isEmpty || result.containsKey(userId)) {
+            continue;
+          }
+          result[userId] = {
+            'full_name': row['full_name'],
+            'email': row['display_email'],
+            'created_at': row['created_at'],
+            'updated_at': row['created_at'],
+          };
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    return result;
   }
 
   Future<Map<String, Map<String, dynamic>>> _fetchHouseholdsById(

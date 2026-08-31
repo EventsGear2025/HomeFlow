@@ -22,6 +22,7 @@ class HomeProIntelligenceReport {
     required this.recommendations,
     required this.tips,
     required this.supplyMonthlySpend,
+    required this.categorySpendTrends,
   });
 
   final String headline;
@@ -41,6 +42,8 @@ class HomeProIntelligenceReport {
   final List<SmartTip> tips;
   /// Monthly spend per supply item (items with price logs only).
   final List<SupplySpendRow> supplyMonthlySpend;
+  /// Multi-month category-level spend trends, forecasts, and anomalies.
+  final List<CategorySpendTrend> categorySpendTrends;
 }
 
 class HomeProSignalMetric {
@@ -117,6 +120,47 @@ class SupplySpendRow {
   final int entryCount;
 }
 
+enum SpendTrendDirection { rising, falling, stable, newSpend }
+
+/// One month's total spend for a category, used to draw trend sparklines.
+class MonthlySpendPoint {
+  const MonthlySpendPoint({required this.month, required this.amount});
+
+  final DateTime month;
+  final double amount;
+}
+
+/// Multi-month spend trend for a supply category — powers the "deeper
+/// details" behind month spend: history, % change, direction, and a simple
+/// next-month forecast plus anomaly detection.
+class CategorySpendTrend {
+  const CategorySpendTrend({
+    required this.category,
+    required this.history,
+    required this.currentMonthSpend,
+    required this.previousMonthSpend,
+    required this.percentChange,
+    required this.direction,
+    required this.forecastNextMonth,
+    required this.isAnomaly,
+    this.anomalyNote,
+  });
+
+  final String category;
+  /// Oldest-to-newest monthly totals (up to 6 months, ending at the
+  /// selected reference month).
+  final List<MonthlySpendPoint> history;
+  final double currentMonthSpend;
+  final double previousMonthSpend;
+  /// Percent change vs previous month. Null when there's no prior baseline.
+  final double? percentChange;
+  final SpendTrendDirection direction;
+  /// Simple linear-extrapolation estimate for next month's spend.
+  final double forecastNextMonth;
+  final bool isAnomaly;
+  final String? anomalyNote;
+}
+
 class HomeProIntelligenceEngine {
   static HomeProIntelligenceReport build({
     required List<MealLog> meals,
@@ -125,6 +169,10 @@ class HomeProIntelligenceEngine {
     required List<UtilityTracker> utilities,
     int householdMembers = 0,
     int childrenCount = 0,
+    /// Calendar month to build the spend table for. Defaults to the current
+    /// month, but a past month can be passed to view historical spend that
+    /// would otherwise be hidden once the month rolls over.
+    DateTime? referenceMonth,
   }) {
     final tips = SmartTipsEngine.allTips(
       meals: meals,
@@ -194,7 +242,15 @@ class HomeProIntelligenceEngine {
     );
 
     final dayLabels = _nextSevenDayLabels();
-    final supplyMonthlySpend = _buildSupplySpend(supplies);
+    final resolvedReferenceMonth = referenceMonth ?? DateTime.now();
+    final supplyMonthlySpend = _buildSupplySpend(
+      supplies,
+      referenceMonth: resolvedReferenceMonth,
+    );
+    final categorySpendTrends = _buildCategoryTrends(
+      supplies,
+      referenceMonth: resolvedReferenceMonth,
+    );
 
     return HomeProIntelligenceReport(
       headline: _headlineForPersona(persona.title),
@@ -256,6 +312,7 @@ class HomeProIntelligenceEngine {
       ),
       tips: tips.take(6).toList(),
       supplyMonthlySpend: supplyMonthlySpend,
+      categorySpendTrends: categorySpendTrends,
     );
   }
 
@@ -450,17 +507,24 @@ class HomeProIntelligenceEngine {
     );
   }
 
-  static List<SupplySpendRow> _buildSupplySpend(List<SupplyItem> supplies) {
-    final now = DateTime.now();
-    final thisMonthStart = DateTime(now.year, now.month, 1);
-    final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+  static List<SupplySpendRow> _buildSupplySpend(
+    List<SupplyItem> supplies, {
+    required DateTime referenceMonth,
+  }) {
+    final thisMonthStart =
+        DateTime(referenceMonth.year, referenceMonth.month, 1);
+    final nextMonthStart =
+        DateTime(referenceMonth.year, referenceMonth.month + 1, 1);
+    final lastMonthStart =
+        DateTime(referenceMonth.year, referenceMonth.month - 1, 1);
     final rows = <SupplySpendRow>[];
     for (final item in supplies) {
       final priced =
           item.usageLogs.where((e) => e.price != null && e.price! > 0).toList();
       if (priced.isEmpty) continue;
       final thisMonth = priced
-          .where((e) => !e.date.isBefore(thisMonthStart))
+          .where((e) =>
+              !e.date.isBefore(thisMonthStart) && e.date.isBefore(nextMonthStart))
           .fold(0.0, (sum, e) => sum + e.price!);
       final lastMonth = priced
           .where((e) =>
@@ -474,12 +538,133 @@ class HomeProIntelligenceEngine {
         thisMonthSpend: thisMonth,
         lastMonthSpend: lastMonth,
         entryCount: priced
-            .where((e) => !e.date.isBefore(thisMonthStart))
+            .where((e) =>
+                !e.date.isBefore(thisMonthStart) && e.date.isBefore(nextMonthStart))
             .length,
       ));
     }
     rows.sort((a, b) => b.thisMonthSpend.compareTo(a.thisMonthSpend));
     return rows;
+  }
+
+  /// Builds multi-month (up to [monthsBack]) category-level spend history,
+  /// trend direction, a simple next-month forecast, and anomaly flags —
+  /// the "deeper details" behind the month spend table.
+  static List<CategorySpendTrend> _buildCategoryTrends(
+    List<SupplyItem> supplies, {
+    required DateTime referenceMonth,
+    int monthsBack = 6,
+  }) {
+    final referenceMonthStart =
+        DateTime(referenceMonth.year, referenceMonth.month, 1);
+
+    // category -> monthStart -> total spend
+    final categoryMonthTotals = <String, Map<DateTime, double>>{};
+    for (final item in supplies) {
+      final priced =
+          item.usageLogs.where((e) => e.price != null && e.price! > 0);
+      for (final entry in priced) {
+        final monthStart = DateTime(entry.date.year, entry.date.month, 1);
+        final monthsDiff = (referenceMonthStart.year - monthStart.year) * 12 +
+            (referenceMonthStart.month - monthStart.month);
+        if (monthsDiff < 0 || monthsDiff >= monthsBack) continue;
+        final catMap =
+            categoryMonthTotals.putIfAbsent(item.category, () => {});
+        catMap.update(monthStart, (v) => v + entry.price!,
+            ifAbsent: () => entry.price!);
+      }
+    }
+
+    final trends = <CategorySpendTrend>[];
+    categoryMonthTotals.forEach((category, monthMap) {
+      final history = <MonthlySpendPoint>[
+        for (var i = monthsBack - 1; i >= 0; i--)
+          MonthlySpendPoint(
+            month: DateTime(
+                referenceMonthStart.year, referenceMonthStart.month - i, 1),
+            amount: monthMap[DateTime(referenceMonthStart.year,
+                    referenceMonthStart.month - i, 1)] ??
+                0,
+          ),
+      ];
+
+      final current = history.last.amount;
+      final previous =
+          history.length >= 2 ? history[history.length - 2].amount : 0.0;
+
+      double? percentChange;
+      if (previous > 0) {
+        percentChange = ((current - previous) / previous) * 100;
+      }
+
+      final SpendTrendDirection direction;
+      if (previous <= 0 && current > 0) {
+        direction = SpendTrendDirection.newSpend;
+      } else if (percentChange == null) {
+        direction = SpendTrendDirection.stable;
+      } else if (percentChange > 10) {
+        direction = SpendTrendDirection.rising;
+      } else if (percentChange < -10) {
+        direction = SpendTrendDirection.falling;
+      } else {
+        direction = SpendTrendDirection.stable;
+      }
+
+      // Forecast next month via the average of the last few month-over-month
+      // deltas, extrapolated from the current month.
+      final nonZeroCount = history.where((h) => h.amount > 0).length;
+      double forecast;
+      if (nonZeroCount >= 2) {
+        final deltas = <double>[
+          for (var i = 1; i < history.length; i++)
+            history[i].amount - history[i - 1].amount,
+        ];
+        final recentDeltas =
+            deltas.length > 3 ? deltas.sublist(deltas.length - 3) : deltas;
+        final avgDelta =
+            recentDeltas.reduce((a, b) => a + b) / recentDeltas.length;
+        forecast = current + avgDelta;
+        if (forecast < 0) forecast = 0;
+      } else {
+        forecast = current;
+      }
+
+      // Anomaly: current month spend far above the household's recent normal.
+      final priorMonths = history
+          .sublist(0, history.length - 1)
+          .where((h) => h.amount > 0)
+          .toList();
+      var isAnomaly = false;
+      String? anomalyNote;
+      if (priorMonths.length >= 2 && current > 500) {
+        final avgPrior =
+            priorMonths.fold(0.0, (sum, h) => sum + h.amount) /
+                priorMonths.length;
+        if (avgPrior > 0) {
+          final pctVsAvg = ((current - avgPrior) / avgPrior) * 100;
+          if (pctVsAvg >= 40) {
+            isAnomaly = true;
+            anomalyNote =
+                '$category spend is up ${pctVsAvg.round()}% vs your usual month';
+          }
+        }
+      }
+
+      trends.add(CategorySpendTrend(
+        category: category,
+        history: history,
+        currentMonthSpend: current,
+        previousMonthSpend: previous,
+        percentChange: percentChange,
+        direction: direction,
+        forecastNextMonth: forecast,
+        isAnomaly: isAnomaly,
+        anomalyNote: anomalyNote,
+      ));
+    });
+
+    trends.sort((a, b) => b.currentMonthSpend.compareTo(a.currentMonthSpend));
+    return trends;
   }
 
   static _ModuleProfile _buildUtilityProfile(List<UtilityTracker> utilities) {
