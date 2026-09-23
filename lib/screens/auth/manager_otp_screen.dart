@@ -93,7 +93,7 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
       if (!otpVerified && (code == 'otp_expired' || msg.contains('expired'))) {
         _otpCtrl.clear();
         setState(() => _codeExpired = true);
-        _showError('That code has expired. Tap resend below.');
+        _showError('That code didn\'t work. It may be incorrect or expired — tap resend below for a new one.');
       } else if (!otpVerified && msg.contains('invalid')) {
         _otpCtrl.clear();
         setState(() => _codeExpired = false);
@@ -284,7 +284,7 @@ class _ManagerOtpScreenState extends State<ManagerOtpScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Your code has expired. Resend the email below.',
+                        'That code didn\'t work. It may be incorrect or expired — resend the email below.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.orange.shade800,

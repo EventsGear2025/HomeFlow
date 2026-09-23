@@ -160,6 +160,8 @@ class ChildProvider extends ChangeNotifier {
   bool _isLoading = false;
 
   List<ChildModel> get children => _children;
+  List<ChildRoutineLog> get routineLogs => _routineLogs;
+  List<ChildSchoolNeed> get schoolNeeds => _schoolNeeds;
   bool get isLoading => _isLoading;
 
   // ── Routine logs ───────────────────────────────────────────────────────────

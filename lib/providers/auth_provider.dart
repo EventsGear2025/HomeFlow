@@ -446,6 +446,17 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('[AuthProvider.login] Supabase error: $e');
     }
 
+    // Offline demo auth is a debug-only convenience for local/demo testing —
+    // never allow the hardcoded demo password to authenticate a release build.
+    if (!kDebugMode) {
+      _currentUser = null;
+      _household = null;
+      _householdMembers = [];
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
     await Future.delayed(const Duration(milliseconds: 500));
     final prefs = await SharedPreferences.getInstance();
     await _ensureBuildDemoAccounts(prefs);

@@ -56,7 +56,8 @@ class _HomeProAnalyticsScreenState extends State<HomeProAnalyticsScreen> {
     final laundry = context.watch<LaundryProvider>();
     final supply = context.watch<SupplyProvider>();
     final utilities = context.watch<UtilityProvider>();
-    final children = context.watch<ChildProvider>().children;
+    final childProvider = context.watch<ChildProvider>();
+    final children = childProvider.children;
 
     final visibleSupplies = supply.visibleSupplies(isOwner: auth.isOwner);
     final visibleUtilities = utilities.visibleItems(isOwner: auth.isOwner);
@@ -67,6 +68,9 @@ class _HomeProAnalyticsScreenState extends State<HomeProAnalyticsScreen> {
       utilities: visibleUtilities,
       householdMembers: auth.householdMembers.length,
       childrenCount: children.length,
+      children: children,
+      childRoutineLogs: childProvider.routineLogs,
+      childSchoolNeeds: childProvider.schoolNeeds,
       referenceMonth: _selectedMonth,
     );
 
@@ -352,10 +356,9 @@ class _FoldableSectionState extends State<_FoldableSection>
 // ─────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.title, this.count});
+  const _SectionLabel({required this.title});
 
   final String title;
-  final int? count;
 
   @override
   Widget build(BuildContext context) {
@@ -369,24 +372,6 @@ class _SectionLabel extends StatelessWidget {
             color: AppColors.textPrimary,
           ),
         ),
-        if (count != null) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppColors.accentOrange.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              '$count',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: AppColors.accentOrange,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -801,6 +786,8 @@ class _ModuleHealthRow extends StatelessWidget {
         return Icons.inventory_2_rounded;
       case 'Utilities':
         return Icons.bolt_rounded;
+      case 'Children':
+        return Icons.child_care_rounded;
       default:
         return Icons.home_rounded;
     }
@@ -1212,6 +1199,9 @@ class _DeepInsightsContent extends StatelessWidget {
     final electricityItems = utilities
         .where((u) => u.type == UtilityType.electricity && !u.isPostpaid)
         .toList();
+    final gasItems = utilities
+        .where((u) => u.type == UtilityType.cookingGas && u.lastRefilledAt != null)
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
@@ -1295,6 +1285,17 @@ class _DeepInsightsContent extends StatelessWidget {
                 items: electricityItems,
                 referenceMonth: selectedMonth,
               ),
+            ),
+          ],
+          if (gasItems.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _SectionLabel(title: 'Cooking Gas'),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _GasInsightsCard(items: gasItems),
             ),
           ],
           const SizedBox(height: 20),
@@ -1569,6 +1570,178 @@ class _ElectricityTokenInsightsCard extends StatelessWidget {
                         ),
                     ],
                   ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _GasInsightsCard extends StatelessWidget {
+  const _GasInsightsCard({required this.items});
+
+  final List<UtilityTracker> items;
+
+  Color _alertColor(GasAlertLevel level) {
+    switch (level) {
+      case GasAlertLevel.overdue:
+      case GasAlertLevel.critical:
+        return AppColors.accentOrange;
+      case GasAlertLevel.warning:
+        return AppColors.warningAmber;
+      case GasAlertLevel.ok:
+        return AppColors.success;
+    }
+  }
+
+  String _alertLabel(GasAlertLevel level) {
+    switch (level) {
+      case GasAlertLevel.overdue:
+        return 'Overdue';
+      case GasAlertLevel.critical:
+        return 'Critical';
+      case GasAlertLevel.warning:
+        return 'Refill soon';
+      case GasAlertLevel.ok:
+        return 'On track';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.local_fire_department_rounded,
+                  size: 18,
+                  color: AppColors.accentOrange,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cooking Gas',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Estimated runway since the last refill',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...items.map((item) {
+            final level = item.gasAlertLevel;
+            final color = _alertColor(level);
+            final remaining = item.estimatedDaysRemaining;
+            final percent = item.gasPercentRemaining;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${item.label} · ${item.brandName}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _alertLabel(level),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (percent != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: percent / 100,
+                        minHeight: 6,
+                        backgroundColor: color.withValues(alpha: 0.12),
+                        valueColor: AlwaysStoppedAnimation<Color>(color),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  Text(
+                    item.gasStatusMessage,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  if (remaining != null) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _InsightMetricChip(
+                          label: 'Days used',
+                          value: '${item.daysSinceRefill}',
+                        ),
+                        _InsightMetricChip(
+                          label: 'Est. remaining',
+                          value: '$remaining day${remaining == 1 ? '' : 's'}',
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             );

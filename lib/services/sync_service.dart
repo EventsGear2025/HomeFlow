@@ -130,7 +130,7 @@ class SyncService {
           .select()
           .eq('owner_user_id', userId)
           .limit(1);
-      if (rows is List && rows.isNotEmpty) {
+      if (rows.isNotEmpty) {
         return Map<String, dynamic>.from(rows.first as Map);
       }
       return null;

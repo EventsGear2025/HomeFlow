@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import '../models/retailer_quote.dart';
 import 'price_scraper_service.dart';
 
@@ -471,12 +470,6 @@ class RetailerCatalogService {
       return true;
     }).toList();
   }
-}
-
-class _ScoredEntry {
-  final _CatalogEntry entry;
-  final double score;
-  const _ScoredEntry(this.entry, this.score);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

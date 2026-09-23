@@ -38,7 +38,6 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(1), 'jane@example.com');
     await tester.enterText(find.byType(TextFormField).at(2), 'secret12');
     await tester.enterText(find.byType(TextFormField).at(3), 'Jane Household');
-    await tester.enterText(find.byType(TextFormField).at(4), '123 Palm Street');
 
     await tester.ensureVisible(find.text('Create Household & Verify Email'));
     await tester.tap(find.text('Create Household & Verify Email'));

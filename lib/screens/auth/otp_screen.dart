@@ -130,7 +130,7 @@ class _OtpScreenState extends State<OtpScreen> {
       if (!otpVerified && (code == 'otp_expired' || msg.contains('expired'))) {
         _otpCtrl.clear();
         setState(() => _codeExpired = true);
-        _showError('That code has expired. Tap resend below.');
+        _showError('That code didn\'t work. It may be incorrect or expired — tap resend below for a new one.');
       } else if (!otpVerified && msg.contains('invalid')) {
         _otpCtrl.clear();
         setState(() => _codeExpired = false);
@@ -431,7 +431,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   color: AppColors.textSecondary.withAlpha(100),
                 ),
                 errorText: _codeExpired
-                    ? 'This code has expired. Send a new one below.'
+                    ? 'That code didn\'t work. Send a new one below.'
                     : null,
                 contentPadding: const EdgeInsets.symmetric(vertical: 20),
               ),
@@ -465,7 +465,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Your code has expired. Request a new one below.',
+                        'That code didn\'t work. It may be incorrect or expired — request a new one below.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.orange.shade900,
@@ -498,44 +498,43 @@ class _OtpScreenState extends State<OtpScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _resendCooldown > 0
-                        ? 'Resend email in ${_resendCooldown}s'
-                        : 'Didn\'t get the email?',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryTeal,
+                  side: BorderSide(
+                    color: (_resendCooldown > 0 || _resending)
+                        ? AppColors.textHint
+                        : AppColors.primaryTeal,
                   ),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                TextButton.icon(
-                  onPressed:
-                      (_resending || _resendCooldown > 0) ? null : _resend,
-                  icon: _resending
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primaryTeal,
-                          ),
-                        )
-                      : const Icon(Icons.refresh_rounded, size: 18),
-                  label: _resending
-                      ? const Text('Resending email…')
-                      : _resendCooldown > 0
-                          ? Text(
-                              'Resend email in ${_resendCooldown}s',
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                              ),
-                            )
-                          : const Text('Resend email'),
-                ),
-              ],
+                onPressed:
+                    (_resending || _resendCooldown > 0) ? null : _resend,
+                icon: _resending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primaryTeal,
+                        ),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 18),
+                label: _resending
+                    ? const Text('Resending email…')
+                    : _resendCooldown > 0
+                        ? Text(
+                            'Resend email in ${_resendCooldown}s',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                            ),
+                          )
+                        : const Text('Resend email'),
+              ),
             ),
             const SizedBox(height: 24),
             Container(

@@ -936,14 +936,12 @@ class _UsageTrendsCard extends StatelessWidget {
     final usageTotals = <String, double>{};
     final usageItemNames = <String, String>{};
     int totalEntriesLast30 = 0;
-    double totalUnitsLast30 = 0;
 
     for (final item in supplies) {
       double total = 0;
       for (final log in item.usageLogs) {
         if (log.date.isAfter(cutoff)) {
           total += log.quantity;
-          totalUnitsLast30 += log.quantity;
           totalEntriesLast30++;
         }
       }

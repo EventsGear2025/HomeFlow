@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -385,6 +386,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _onLogoTap() {
+    if (!kDebugMode) return;
     final now = DateTime.now();
     if (_firstTap == null || now.difference(_firstTap!) > const Duration(seconds: 2)) {
       _firstTap = now;

@@ -14,7 +14,7 @@ drop function if exists public.get_my_household_ids();
 create or replace function public.get_my_household_ids()
 returns setof text
 language sql
-stable
+stableI
 security definer
 set search_path = public
 as $$

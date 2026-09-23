@@ -1,3 +1,4 @@
+import '../models/child_model.dart';
 import '../models/laundry_item.dart';
 import '../models/meal_log.dart';
 import '../models/supply_item.dart';
@@ -169,6 +170,9 @@ class HomeProIntelligenceEngine {
     required List<UtilityTracker> utilities,
     int householdMembers = 0,
     int childrenCount = 0,
+    List<ChildModel> children = const <ChildModel>[],
+    List<ChildRoutineLog> childRoutineLogs = const <ChildRoutineLog>[],
+    List<ChildSchoolNeed> childSchoolNeeds = const <ChildSchoolNeed>[],
     /// Calendar month to build the spend table for. Defaults to the current
     /// month, but a past month can be passed to view historical spend that
     /// would otherwise be hidden once the month rolls over.
@@ -185,12 +189,16 @@ class HomeProIntelligenceEngine {
     final laundryProfile = _buildLaundryProfile(laundry);
     final supplyProfile = _buildSupplyProfile(supplies);
     final utilityProfile = _buildUtilityProfile(utilities);
+    final childrenProfile = children.isEmpty
+        ? null
+        : _buildChildrenProfile(children, childRoutineLogs, childSchoolNeeds);
 
     final moduleProfiles = <_ModuleProfile>[
       mealProfile,
       laundryProfile,
       supplyProfile,
       utilityProfile,
+      if (childrenProfile != null) childrenProfile,
     ];
 
     final strongest = _highestProfile(moduleProfiles);
@@ -504,6 +512,84 @@ class HomeProIntelligenceEngine {
           ? 'Supplies are protecting the week instead of interrupting it.'
           : 'Supplies are starting to create avoidable household friction.',
       watchpoints: needAttention + gasAlerts,
+    );
+  }
+
+  /// Builds the Children module from today's morning-routine checklists and
+  /// unresolved school-item needs. Only called when the household has at
+  /// least one child profile.
+  static _ModuleProfile _buildChildrenProfile(
+    List<ChildModel> children,
+    List<ChildRoutineLog> routineLogs,
+    List<ChildSchoolNeed> schoolNeeds,
+  ) {
+    final now = DateTime.now();
+    final tomorrow = now.add(const Duration(days: 1));
+
+    bool isSameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+
+    ChildRoutineLog? logForChildOn(String childId, DateTime day) {
+      for (final log in routineLogs) {
+        if (log.childId == childId && isSameDay(log.date, day)) return log;
+      }
+      return null;
+    }
+
+    var checklistTotal = 0;
+    var loggedChildren = 0;
+    for (final child in children) {
+      final log = logForChildOn(child.id, now);
+      if (log != null) {
+        checklistTotal += log.checkedCount;
+        loggedChildren++;
+      }
+    }
+    final routineScore = loggedChildren == 0
+        ? 20
+        : _clampScore((checklistTotal / (loggedChildren * 7)) * 100);
+
+    final unresolvedToday = schoolNeeds
+        .where((n) => !n.isResolved && isSameDay(n.neededForDate, now))
+        .length;
+    final unresolvedTomorrow = schoolNeeds
+        .where((n) => !n.isResolved && isSameDay(n.neededForDate, tomorrow))
+        .length;
+
+    final score = _clampScore(
+      routineScore - (unresolvedToday * 16.0) - (unresolvedTomorrow * 6.0),
+    );
+
+    final subtitle = unresolvedToday > 0
+        ? '$unresolvedToday item${unresolvedToday == 1 ? '' : 's'} still needed for school today'
+        : loggedChildren == 0
+            ? 'No morning routine checked off yet today'
+            : loggedChildren < children.length
+                ? '$loggedChildren of ${children.length} morning routines logged today'
+                : 'All morning routines logged today';
+
+    final forecastValues = List<int>.generate(7, (index) {
+      final day = now.add(Duration(days: index));
+      final dueThatDay = schoolNeeds
+          .where((n) => !n.isResolved && isSameDay(n.neededForDate, day))
+          .length;
+      final base = index == 0 ? (100 - routineScore) : 12;
+      return _clampScore((base + dueThatDay * 22).toDouble());
+    });
+
+    return _ModuleProfile(
+      label: 'Children',
+      score: score,
+      cadenceScore: routineScore,
+      subtitle: subtitle,
+      forecastValues: forecastValues,
+      forecastSummary: unresolvedTomorrow > 0
+          ? '$unresolvedTomorrow item${unresolvedTomorrow == 1 ? '' : 's'} needed for school tomorrow — get ahead of it tonight.'
+          : 'Morning routines are the easiest lever for a calmer school run.',
+      routineNote: unresolvedToday == 0 && routineScore >= 70
+          ? 'School mornings are running smoothly for the household.'
+          : 'School-morning prep still needs a firmer routine.',
+      watchpoints: unresolvedToday,
     );
   }
 
@@ -1038,6 +1124,8 @@ class HomeProIntelligenceEngine {
         return 'Restock before the list gets noisy';
       case 'Utilities':
         return 'Get ahead of the next bill or refill';
+      case 'Children':
+        return 'Firm up the school-morning routine';
       default:
         return 'Tighten the weakest household loop';
     }
@@ -1053,6 +1141,8 @@ class HomeProIntelligenceEngine {
         return 'Clear low and finished items earlier in the week so shopping stays deliberate instead of reactive.';
       case 'Utilities':
         return 'Pay or top up the nearest utility deadlines before they become interruptions, surprise costs, or last-minute errands.';
+      case 'Children':
+        return 'Check off uniforms, lunches, and school items the night before so mornings stop starting in a rush.';
       default:
         return 'The easiest premium lift now is to tighten the weakest routine while momentum is still on your side.';
     }
@@ -1068,6 +1158,8 @@ class HomeProIntelligenceEngine {
         return 'Supplies are quietly protecting the week';
       case 'Utilities':
         return 'Bills and refills are giving you a calm edge';
+      case 'Children':
+        return 'School mornings are running like clockwork';
       default:
         return 'One system is already doing premium-level work';
     }
@@ -1083,6 +1175,8 @@ class HomeProIntelligenceEngine {
         return 'You are getting premium value from staying ahead of low stock. Keep restocks early and quiet so the shield stays strong.';
       case 'Utilities':
         return 'When utilities stay ahead, everything else feels lighter. Keep using that lead time to avoid surprise spending.';
+      case 'Children':
+        return 'Consistent morning routines are giving the whole household a calmer start, home pulse of $homePulse and all.';
       default:
         return 'Double down on the strongest routine because it is already lifting the rest of the household.';
     }

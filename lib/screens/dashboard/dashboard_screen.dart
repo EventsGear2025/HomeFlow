@@ -61,7 +61,8 @@ class DashboardScreen extends StatelessWidget {
     final missingPriceLogs = [
       ...supply.historyRequests.where((request) => request.pricePaid == null),
     ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    final children = context.watch<ChildProvider>().children;
+    final childProvider = context.watch<ChildProvider>();
+    final children = childProvider.children;
     final unread = notifications.unreadCount;
     final homeProTips = SmartTipsEngine.allTips(
       meals: meals.mealLogs,
@@ -76,6 +77,9 @@ class DashboardScreen extends StatelessWidget {
       utilities: visibleUtilities,
       householdMembers: auth.householdMembers.length,
       childrenCount: children.length,
+      children: children,
+      childRoutineLogs: childProvider.routineLogs,
+      childSchoolNeeds: childProvider.schoolNeeds,
     );
     final analyticsHighlights = auth.isHomePro
         ? <String>[
@@ -310,33 +314,7 @@ class DashboardScreen extends StatelessWidget {
                   _QuickActionsRow(
                     isOwner: auth.isOwner,
                     onNavigate: onNavigate,
-                    onOpenInsights: openHomeProIntelligence,
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Home Status
-                  const _SectionHeader(title: 'Home Status'),
-                  const SizedBox(height: 12),
-                  _HomeStatusStrip(
-                    supply: supply,
-                    laundry: laundry,
-                    utilities: utilities,
-                    isOwner: auth.isOwner,
-                    onSupplies: () => onNavigate?.call(1),
-                    onLaundry: () => onNavigate?.call(3),
-                    onUtilities: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const UtilitiesScreen(),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Sponsored ad strip
-                  const _AdBannerStrip(),
 
                   const SizedBox(height: 20),
                   _SectionHeader(
@@ -372,6 +350,9 @@ class DashboardScreen extends StatelessWidget {
                       onViewAll: openHomeProIntelligence,
                     ),
                   ],
+
+                  const SizedBox(height: 20),
+                  const _AdBannerStrip(),
 
                   const SizedBox(height: 28),
 
@@ -1240,11 +1221,9 @@ class _AlertBanner extends StatelessWidget {
 class _QuickActionsRow extends StatelessWidget {
   final bool isOwner;
   final void Function(int)? onNavigate;
-  final VoidCallback onOpenInsights;
 
   const _QuickActionsRow({
     required this.isOwner,
-    required this.onOpenInsights,
     this.onNavigate,
   });
 
@@ -1268,18 +1247,6 @@ class _QuickActionsRow extends StatelessWidget {
               ),
             ),
             _QA(
-              Icons.local_laundry_service_outlined,
-              'Laundry',
-              AppColors.secondaryTeal,
-              () => onNavigate?.call(3),
-            ),
-            _QA(
-              Icons.restaurant_outlined,
-              'Meals',
-              AppColors.statusLowText,
-              () => onNavigate?.call(4),
-            ),
-            _QA(
               Icons.badge_outlined,
               'Staff',
               AppColors.textSecondary,
@@ -1287,12 +1254,6 @@ class _QuickActionsRow extends StatelessWidget {
                 context,
                 MaterialPageRoute(builder: (_) => const StaffScreen()),
               ),
-            ),
-            _QA(
-              Icons.auto_awesome_mosaic_rounded,
-              'Insights',
-              AppColors.uiBlue,
-              onOpenInsights,
             ),
           ]
         : [
@@ -1310,12 +1271,6 @@ class _QuickActionsRow extends StatelessWidget {
                 context,
                 MaterialPageRoute(builder: (_) => const UtilitiesScreen()),
               ),
-            ),
-            _QA(
-              Icons.auto_awesome_mosaic_rounded,
-              'Insights',
-              AppColors.uiBlue,
-              onOpenInsights,
             ),
           ];
 
@@ -1384,154 +1339,6 @@ class _QA {
   final Color color;
   final VoidCallback onTap;
   const _QA(this.icon, this.label, this.color, this.onTap);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HOME STATUS STRIP
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _HomeStatusStrip extends StatelessWidget {
-  final SupplyProvider supply;
-  final LaundryProvider laundry;
-  final UtilityProvider utilities;
-  final bool isOwner;
-  final VoidCallback onSupplies;
-  final VoidCallback onLaundry;
-  final VoidCallback onUtilities;
-
-  const _HomeStatusStrip({
-    required this.supply,
-    required this.laundry,
-    required this.utilities,
-    required this.isOwner,
-    required this.onSupplies,
-    required this.onLaundry,
-    required this.onUtilities,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final lowStock = supply.lowStockItems(isOwner: isOwner).length;
-    final active = laundry.activeItems.length;
-    // Filter utility alerts: managers must not see owner-only items
-    final utilAlerts = utilities.lowAlertItems
-        .where((i) => isOwner || !i.isOwnerOnly)
-        .length;
-
-    return Row(
-      children: [
-        Expanded(
-          child: _StatusTile(
-            icon: Icons.inventory_2_outlined,
-            label: 'Supplies',
-            value: lowStock == 0 ? 'All good' : '$lowStock low',
-            isAlert: lowStock > 0,
-            onTap: onSupplies,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatusTile(
-            icon: Icons.local_laundry_service_outlined,
-            label: 'Laundry',
-            value: active == 0 ? 'Clear' : '$active active',
-            isAlert: false,
-            onTap: onLaundry,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatusTile(
-            icon: Icons.bolt_outlined,
-            label: 'Utilities',
-            value: utilAlerts == 0 ? 'All OK' : '$utilAlerts alert',
-            isAlert: utilAlerts > 0,
-            onTap: onUtilities,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool isAlert;
-  final VoidCallback onTap;
-
-  const _StatusTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.isAlert,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final Color accent = isAlert
-        ? AppColors.accentOrange
-        : AppColors.primaryTeal;
-    final Color bg = isAlert
-        ? AppColors.accentOrange.withValues(alpha: 0.07)
-        : AppColors.primaryTeal.withValues(alpha: 0.06);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isAlert
-                ? AppColors.accentOrange.withValues(alpha: 0.25)
-                : AppColors.divider,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: accent, size: 17),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: isAlert ? AppColors.accentOrange : AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2844,12 +2651,15 @@ class _AdBannerStripState extends State<_AdBannerStrip> {
                             const SizedBox(height: 5),
                             Row(
                               children: [
-                                Text(
-                                  offer.formattedOldPrice,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: AppColors.textHint,
-                                    decoration: TextDecoration.lineThrough,
+                                Flexible(
+                                  child: Text(
+                                    offer.formattedOldPrice,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: AppColors.textHint,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 6),

@@ -263,8 +263,6 @@ class _StaffBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [

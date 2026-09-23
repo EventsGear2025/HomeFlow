@@ -88,24 +88,19 @@ class SmartTipsEngine {
     if (last30.isEmpty) return [];
 
     // ── Count nutritionTag occurrences ──────────────────────────────────────
-    int carbCount = 0, proteinCount = 0, vegCount = 0,
-        fruitCount = 0, dairyCount = 0, hydrationCount = 0;
+    int carbCount = 0, proteinCount = 0, vegCount = 0;
 
     for (final log in last30) {
       final tags = log.nutritionTags;
       if (tags.contains('Carbs'))      carbCount++;
       if (tags.contains('Protein'))    proteinCount++;
       if (tags.contains('Vegetables')) vegCount++;
-      if (tags.contains('Fruit'))      fruitCount++;
-      if (tags.contains('Dairy'))      dairyCount++;
-      if (tags.contains('Hydration'))  hydrationCount++;
     }
 
     final total = last30.length;
     final carbPct    = (carbCount    / total * 100).round();
     final proteinPct = (proteinCount / total * 100).round();
     final vegPct     = (vegCount     / total * 100).round();
-    final fruitPct   = (fruitCount   / total * 100).round();
 
     // Too many carbs
     if (carbPct >= 70) {
@@ -486,7 +481,7 @@ class SmartTipsEngine {
                   'Plan a refill in the next 2–3 days to avoid disruption. '
                   'Pre-booking ensures faster delivery.',
           ));
-        } else if (rem != null && rem > 7 && rem <= 14) {
+        } else if (rem > 7 && rem <= 14) {
           tips.add(SmartTip(
             id: 'gas_plan_${gas.id}',
             category: TipCategory.utilities,
